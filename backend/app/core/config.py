@@ -54,6 +54,19 @@ class Settings:
     embedding_dimension: int | None = field(
         default_factory=lambda: _optional_int(os.getenv("REPOLENS_EMBEDDING_DIMENSION", ""))
     )
+    safe_static_check_enabled: bool = field(
+        default_factory=lambda: _optional_bool(
+            os.getenv("REPOLENS_SAFE_STATIC_CHECK_ENABLED", "")
+        )
+    )
+    safe_static_check_allowed_checkers: list[str] = field(
+        default_factory=lambda: _split_csv(
+            os.getenv(
+                "REPOLENS_SAFE_STATIC_CHECK_ALLOWED_CHECKERS",
+                "python_ast_parse",
+            )
+        )
+    )
 
 
 @lru_cache(maxsize=1)
@@ -71,3 +84,7 @@ def _optional_float(value: str) -> float | None:
     if not value.strip():
         return None
     return float(value)
+
+
+def _optional_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}

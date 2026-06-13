@@ -13,6 +13,7 @@ class RelationType(StrEnum):
     IMPORTS = "imports"
     CALLS = "calls"
     DEFINED_IN = "defined_in"
+    CHANGED_BY = "changed_by"
 
 
 class CodeRelation(Base):
@@ -43,4 +44,3 @@ class CodeRelation(Base):
 
 
 from app.models.repository import Repository  # noqa: E402
-

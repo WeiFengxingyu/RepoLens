@@ -64,7 +64,12 @@ class Task(Base):
         back_populates="task",
         cascade="all, delete-orphan",
     )
+    tool_calls: Mapped[list["ToolCall"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+    )
 
 
 from app.models.agent_trace import AgentTrace  # noqa: E402
 from app.models.repository import Repository  # noqa: E402
+from app.models.tool_call import ToolCall  # noqa: E402

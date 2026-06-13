@@ -4,6 +4,13 @@ from app.schemas.qa import (
     QACreateRequest,
     QATaskResponse,
 )
+from app.schemas.evaluation import (
+    EvaluationCreateRequest,
+    EvaluationMetricResponse,
+    EvaluationResultResponse,
+    EvaluationRunResponse,
+    EvaluationRunSummary,
+)
 from app.schemas.repository import (
     EvidenceResponse,
     RepositoryDetail,
@@ -15,10 +22,20 @@ from app.schemas.repository import (
     RetrievalDebugResponse,
     VectorIndexResponse,
 )
+from app.schemas.review import (
+    ReviewCreateRequest,
+    ReviewTaskResponse,
+    ReviewToolCallResponse,
+)
 
 __all__ = [
     "AgentTraceResponse",
     "EvidenceResponse",
+    "EvaluationCreateRequest",
+    "EvaluationMetricResponse",
+    "EvaluationResultResponse",
+    "EvaluationRunResponse",
+    "EvaluationRunSummary",
     "QACitationResponse",
     "QACreateRequest",
     "QATaskResponse",
@@ -29,5 +46,8 @@ __all__ = [
     "RetrievalDebugInfo",
     "RetrievalDebugRequest",
     "RetrievalDebugResponse",
+    "ReviewCreateRequest",
+    "ReviewTaskResponse",
+    "ReviewToolCallResponse",
     "VectorIndexResponse",
 ]

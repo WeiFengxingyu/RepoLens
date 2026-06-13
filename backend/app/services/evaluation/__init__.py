@@ -1,2 +1,75 @@
-"""Evaluation service placeholder."""
+"""Evaluation services."""
 
+from app.services.evaluation.dataset import (
+    EvaluationDataset,
+    EvaluationDatasetError,
+    EvaluationSample,
+    EvaluationSampleType,
+    load_evaluation_dataset,
+    parse_evaluation_sample,
+)
+from app.services.evaluation.metrics import (
+    DEFAULT_HIT_TOP_K,
+    EvaluationAggregateMetrics,
+    EvaluationMetricsError,
+    EvaluationSampleMetric,
+    compute_aggregate_metrics,
+    compute_sample_metrics,
+    estimate_token_count,
+)
+from app.services.evaluation.runner import (
+    BM25_VECTOR_GRAPH_STRATEGY,
+    BM25_VECTOR_GRAPH_TOP_K,
+    BM25_VECTOR_STRATEGY,
+    BM25_VECTOR_TOP_K,
+    VECTOR_ONLY_STRATEGY,
+    VECTOR_ONLY_TOP_K,
+    BM25VectorGraphEvaluationResult,
+    BM25VectorEvaluationResult,
+    EvaluationEvidenceRef,
+    VectorOnlyEvaluationResult,
+    run_bm25_vector_graph_sample,
+    run_bm25_vector_sample,
+    run_vector_only_sample,
+)
+from app.services.evaluation.service import (
+    EVALUATION_STRATEGIES,
+    EvaluationRepositoryNotReadyError,
+    EvaluationService,
+    EvaluationServiceError,
+    EvaluationValidationError,
+)
+
+__all__ = [
+    "EvaluationDataset",
+    "EvaluationDatasetError",
+    "EvaluationEvidenceRef",
+    "EvaluationAggregateMetrics",
+    "EvaluationMetricsError",
+    "EvaluationRepositoryNotReadyError",
+    "EvaluationSample",
+    "EvaluationSampleMetric",
+    "EvaluationSampleType",
+    "EvaluationService",
+    "EvaluationServiceError",
+    "EvaluationValidationError",
+    "EVALUATION_STRATEGIES",
+    "DEFAULT_HIT_TOP_K",
+    "BM25_VECTOR_GRAPH_STRATEGY",
+    "BM25_VECTOR_GRAPH_TOP_K",
+    "BM25VectorGraphEvaluationResult",
+    "BM25_VECTOR_STRATEGY",
+    "BM25_VECTOR_TOP_K",
+    "BM25VectorEvaluationResult",
+    "VECTOR_ONLY_STRATEGY",
+    "VECTOR_ONLY_TOP_K",
+    "VectorOnlyEvaluationResult",
+    "compute_aggregate_metrics",
+    "compute_sample_metrics",
+    "estimate_token_count",
+    "load_evaluation_dataset",
+    "parse_evaluation_sample",
+    "run_bm25_vector_graph_sample",
+    "run_bm25_vector_sample",
+    "run_vector_only_sample",
+]

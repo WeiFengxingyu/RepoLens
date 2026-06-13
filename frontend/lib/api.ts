@@ -1,6 +1,11 @@
 import type {
+  EvaluationCreateRequest,
+  EvaluationRunResponse,
+  EvaluationRunSummary,
   QACreateRequest,
   QATaskResponse,
+  ReviewCreateRequest,
+  ReviewTaskResponse,
   RepositoryDetail,
   RepositoryImportRequest,
   RepositoryStatusResponse,
@@ -61,6 +66,37 @@ export async function askRepositoryQuestion(
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export async function createReview(
+  repositoryId: string,
+  payload: ReviewCreateRequest
+): Promise<ReviewTaskResponse> {
+  return request<ReviewTaskResponse>(`${API_ROUTES.repositories}/${repositoryId}/reviews`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getReview(taskId: string): Promise<ReviewTaskResponse> {
+  return request<ReviewTaskResponse>(`/api/reviews/${taskId}`);
+}
+
+export async function createEvaluation(
+  payload: EvaluationCreateRequest
+): Promise<EvaluationRunResponse> {
+  return request<EvaluationRunResponse>("/api/evaluations", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listEvaluations(): Promise<EvaluationRunSummary[]> {
+  return request<EvaluationRunSummary[]>("/api/evaluations");
+}
+
+export async function getEvaluation(runId: string): Promise<EvaluationRunResponse> {
+  return request<EvaluationRunResponse>(`/api/evaluations/${runId}`);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

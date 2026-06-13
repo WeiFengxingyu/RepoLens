@@ -75,8 +75,13 @@ class Repository(Base):
         back_populates="repository",
         cascade="all, delete-orphan",
     )
+    tool_calls: Mapped[list["ToolCall"]] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+    )
 
 
 from app.models.code_chunk import CodeChunk  # noqa: E402
 from app.models.code_relation import CodeRelation  # noqa: E402
 from app.models.task import Task  # noqa: E402
+from app.models.tool_call import ToolCall  # noqa: E402

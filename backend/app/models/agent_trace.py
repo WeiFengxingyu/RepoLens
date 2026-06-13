@@ -51,6 +51,8 @@ class AgentTrace(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     task: Mapped["Task"] = relationship(back_populates="traces")
+    tool_call_records: Mapped[list["ToolCall"]] = relationship(back_populates="trace")
 
 
 from app.models.task import Task  # noqa: E402
+from app.models.tool_call import ToolCall  # noqa: E402

@@ -12,6 +12,7 @@ GRAPH_RELATION_WEIGHTS = {
     RelationType.DEFINED_IN.value: 0.6,
     RelationType.CALLS.value: 0.6,
     RelationType.IMPORTS.value: 0.5,
+    RelationType.CHANGED_BY.value: 0.4,
 }
 
 

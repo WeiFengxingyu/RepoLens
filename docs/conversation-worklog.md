@@ -499,6 +499,319 @@ Codex 检查当前工作区，发现工作区为空。随后创建 `docs` 目录
 - 更新 `docs/phase3-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P3-010/P3-011 的开发、审核、测试和评测闭环。
 - Phase 3 P3-001 到 P3-011 已全部完成。
 
+### 2026-06-06 工作记录 041
+
+- 用户确认 Phase 3 已完成，并要求按之前策略进入 Phase 4。
+- 创建自动化 `repolens-phase-4`，按 10 分钟 heartbeat 继续推进 Phase 4：PR Review、Multi-Agent 与 MCP-style 工具调用。
+- 自动化要求严格依据 `docs/p0-plus-development-plan.md` 的 Phase 4 任务清单执行，不扩展 P0+ 范围。
+- Phase 4 第一步是先编写非常详细、准确、可落地的详细设计文档，再按设计逐步开发，并维护 P4-001 到 P4-014 对应的闭环记录。
+
+### 2026-06-06 工作记录 042
+
+- 自动化 `repolens-phase-4` 触发，开始推进 Phase 4：PR Review、Multi-Agent 与 MCP-style 工具调用。
+- 核对 `docs/p0-plus-development-plan.md` 中 Phase 4 任务清单，确认范围为 tool_calls、MCP-style 工具层、Diff 解析、Review API、Review Agents、Review Panel 和工具调用展示。
+- 新增 `docs/phase4-detailed-design.md`，覆盖 tool_calls 表、analyze_diff、read_file_slice、code_search、get_symbol_context、run_safe_static_check 占位、Diff 到 symbol 映射、Review API、Risk Reviewer Agent、Review Verifier、Test Suggestion Agent、Review Report Writer、Review Panel、工具调用展示、MCP-style Tool Layer 权限边界、接口设计、错误处理、安全边界、测试策略和验收标准。
+- 新增 `docs/phase4-closed-loop-log.md`，按 P4-DESIGN 和 P4-001 到 P4-014 建立开发、审核、测试和评测记录。
+- 更新 `docs/development-worklog.md`，记录 Phase 4 详细设计和闭环记录已创建。
+- 当前尚未进入 Phase 5 评测部署、完整 MCP Server、真实命令执行或复杂自治 Multi-Agent，仍严格限定在 Phase 4 PR Review 闭环。
+
+### 2026-06-06 工作记录 043
+
+- 继续完成 P4-001：实现 `tool_calls` 表。
+- 新增 `backend/app/models/tool_call.py`，实现 `ToolCall`、`ToolCallStatus`、`ToolPermissionDecision`。
+- 更新 `backend/app/models/task.py`、`backend/app/models/repository.py`、`backend/app/models/agent_trace.py` 和 `backend/app/models/__init__.py`，接入 tool call 与 task、repository、trace 的 ORM 关系。
+- 保留 Phase 3 已有 `AgentTrace.tool_calls` JSON 文本列；将 Phase 4 新增的 trace 关系命名为 `tool_call_records`，避免字段冲突。
+- 新增 `backend/app/tests/test_phase4_models.py`，覆盖 `tool_calls` 表创建、round-trip、权限/状态字段、payload/error/latency 字段和 repository 删除级联。
+- 自查发现首次实现中 `AgentTrace.tool_calls` 关系与 JSON 文本列同名，导致 Phase 3 AgentTrace 构造与 QA API 测试失败；已修正并重新验证。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 93 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-001 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 044
+
+- 继续完成 P4-002：实现 `analyze_diff` 工具。
+- 新增 `backend/app/services/tools/diff_analyzer.py`，实现 `DiffAnalysis`、`DiffFile`、`DiffHunk`、`DiffLine` 和 `DiffAnalyzerError`。
+- `analyze_diff` 支持标准 unified diff、`diff --git` 文件头、`---`/`+++` 文件标记、`@@ -a,b +c,d @@` hunk、added/removed 行号统计、added/modified/deleted/renamed 基础识别和 binary diff 标记。
+- P4-002 保持纯解析服务，不执行 patch、不写数据库、不接 Review API；后续 Tool Layer 权限日志、Review API 422 转换和前端展示继续按 P4-003 到 P4-014 推进。
+- 新增 `backend/app/tests/test_phase4_diff_analyzer.py`，覆盖 modified、added、deleted、renamed、binary、to_dict 输出、空 diff、unsupported diff、diff 大小限制和 hunk 行数限制。
+- 自查发现 `app.services.tools` 统一入口未导出 `DIFF_MAX_CHARS` 和 `HUNK_MAX_LINES`，已补充导出。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 99 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-002 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 045
+
+- 继续完成 P4-003：实现 `read_file_slice` 工具。
+- 新增 `backend/app/services/tools/file_reader.py`，实现 `FileSliceResult`、`FileSliceError` 和 `read_file_slice`。
+- `read_file_slice` 只接受仓库根目录与仓库相对路径，拒绝绝对路径、`.`/`..`、符号链接路径、解析后离开仓库根目录的路径、敏感文件、依赖/缓存目录、二进制文件、缺失文件和非法行号。
+- 读取结果最多 120 行或 12000 字符，超过限制时返回截断内容并设置 `truncated=true`。
+- 新增 `backend/app/tests/test_phase4_file_reader.py`，覆盖正常行范围读取、行数截断、字符截断、绝对路径拒绝、路径穿越拒绝、敏感文件拒绝、blocked dir 拒绝、二进制拒绝、缺失文件和非法行号。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 105 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-003 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 046
+
+- 继续完成 P4-004：实现 `code_search` 工具。
+- 新增 `backend/app/services/tools/code_search.py`，实现 `CodeSearchResult`、`CodeSearchEvidence`、`CodeSearchDebug`、`CodeSearchError` 和 `code_search`。
+- `code_search` 复用 Phase 2 `retrieve_repository`，保持 BM25、vector、graph、merge、rerank、Evidence 构建逻辑不重复实现。
+- 输出 Evidence-compatible 字段、debug 计数和 warnings；默认无 embedding 配置时将 vector disabled 转为 warning，不阻断 BM25/graph 检索。
+- 新增 `backend/app/tests/test_phase4_code_search.py`，覆盖 Evidence-compatible 输出、debug 计数、vector disabled warning、显式关闭 vector、空仓库和输入校验。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 109 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-004 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 047
+
+- 继续完成 P4-005：实现 `get_symbol_context` 工具。
+- 新增 `backend/app/services/tools/symbol_context.py`，实现 `SymbolContextResult`、`SymbolContextSymbol`、`SymbolContextNeighbor`、`SymbolContextError` 和 `get_symbol_context`。
+- `get_symbol_context` 从 `code_chunks` 按 repository、symbol_name 和可选 file_path 查找目标 symbol；同名 symbol 未传 file_path 时按文件路径/行号选择第一个并返回 warning。
+- 邻域基于现有 `load_code_graph`，返回入边、出边和 same-file 关系，重复邻居按首次出现关系去重，不创建外部虚拟 symbol。
+- 新增 `backend/app/tests/test_phase4_symbol_context.py`，覆盖目标 symbol、callers、callees、imports、same-file 去重、同名 symbol file_path 过滤、max_neighbors 和输入校验。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 114 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-005 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 048
+
+- 继续完成 P4-006：实现 `run_safe_static_check` 占位工具。
+- 更新 `backend/app/core/config.py` 和 `.env.example`，新增 `REPOLENS_SAFE_STATIC_CHECK_ENABLED=false` 与 `REPOLENS_SAFE_STATIC_CHECK_ALLOWED_CHECKERS=python_ast_parse`。
+- 新增 `backend/app/services/tools/static_check.py`，实现 `StaticCheckResult`、`StaticCheckError` 和 `run_safe_static_check`。
+- 默认配置下工具返回 `permission_decision=disabled`、`status=disabled`、`executed=false`；显式开启后非白名单 checker 返回 deny；白名单 checker 也只返回 no-execution placeholder。
+- 工具不执行 shell、不启动子进程、不读取文件，只校验 checker、file_paths、路径穿越和最大文件数量。
+- 新增 `backend/app/tests/test_phase4_static_check.py`，覆盖默认 disabled、白名单 allow placeholder、非白名单 deny 和输入路径校验。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 118 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-006 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 049
+
+- 继续完成 P4-007：实现 Diff 到 symbol 映射。
+- 更新 `backend/app/models/code_relation.py`，新增 `RelationType.CHANGED_BY = "changed_by"`；更新 `backend/app/services/graph/code_graph.py`，为 `changed_by` 设置低权重。
+- 新增 `backend/app/services/review/diff_mapper.py`，实现 `map_diff_to_symbols`、`write_changed_by_relations`、`DiffSymbolMappingResult`、`DiffSymbolMatch` 和 `UnmatchedDiffLine`。
+- `map_diff_to_symbols` 基于 `DiffAnalysis` changed lines 和 `code_chunks` 行号范围匹配 symbol；多层 chunk 命中时选择最小范围 chunk，避免 file-level chunk 覆盖函数级 chunk。
+- 未命中任何 chunk 时记录 `unmatched_lines`，不伪造 symbol。
+- `write_changed_by_relations` 写入前按 task_id 删除旧 `changed_by` metadata，避免同任务重复写入。
+- 新增 `backend/app/tests/test_phase4_diff_mapper.py`，覆盖 added/removed 行映射、file-level fallback、unmatched_lines、changed_by 写入去重和输入校验。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 123 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-007 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 050
+
+- 继续完成 P4-008：实现 Review API。
+- 新增 `backend/app/schemas/review.py`，定义 Review 创建请求、Review task response 和 tool call response。
+- 新增 `backend/app/services/review/service.py`，实现 Review task 创建、repository ready 校验、Review task 查询和 response 构建。
+- 新增 `backend/app/api/reviews.py` 并在 `backend/app/main.py` 注册 router，支持 `POST /api/repositories/{repository_id}/reviews` 和 `GET /api/reviews/{task_id}`。
+- P4-008 仅创建 `task_type=review`、`status=pending` 的 task 和空报告结构，不提前实现 P4-009 到 P4-012 的风险分析、校验、测试建议或报告生成。
+- 新增 `backend/app/tests/test_phase4_review_api.py`，覆盖创建 pending Review task、查询 Review response、未 ready 仓库拒绝、空 diff 422 和缺失 Review task 404。
+- 自查修复：将 `HTTP_422_UNPROCESSABLE_ENTITY` 弃用常量替换为字面量 422，避免新增 deprecation warning。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 126 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-008 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 051
+
+- 继续完成 P4-009：实现 Risk Reviewer Agent。
+- 新增 `backend/app/services/review/agents.py`，实现 `review_risks`、`DraftReviewRisk`、`ReviewRiskLocation` 和 `RiskReviewerResult`。
+- `review_risks` 有 chat adapter 时按 JSON schema 解析风险草稿；无 adapter 或 chat disabled/request error 时使用规则 fallback。
+- fallback 基于 diff mapping 和 evidence 生成 conservative risk，风险草稿必须带 `diff_refs` 或 evidence_ids，不直接输出最终 Review 报告。
+- 新增 `backend/app/tests/test_phase4_risk_reviewer_agent.py`，覆盖 mapped symbol 风险、unmatched file 风险、chat JSON 分支和 max_risks。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 130 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-009 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 052
+
+- 继续完成 P4-010：实现 Review Verifier。
+- 扩展 `backend/app/services/review/agents.py`，新增 `ReviewVerifierResult` 和 `verify_review_risks`。
+- Verifier 只过滤或降级 Risk Reviewer 生成的风险草稿，不新增事实、不生成新风险。
+- 风险必须具备有效 evidence_id 或 diff_refs；location 必须来自 diff 文件、evidence 文件或风险自身 diff_refs。
+- 仅有 diff 支撑且 severity=high 的风险会降级为 medium；无支撑风险进入 missing_risks。
+- 新增 `backend/app/tests/test_phase4_review_verifier_agent.py`，覆盖有效 evidence、diff-only high 降级、unsupported risk 移除和 location 来源校验。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 134 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-010 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 053
+
+- 继续完成 P4-011：实现 Test Suggestion Agent。
+- 扩展 `backend/app/services/review/agents.py`，新增 `SuggestedReviewTest`、`TestSuggestionResult` 和 `suggest_review_tests`。
+- Test Suggestion Agent 不运行测试、不探测环境，只基于 verified risks、impacted_symbols 和 changed files 输出结构化建议。
+- 每条建议包含 target、reason、test_type、related_risk_titles 和 file_path；建议按 target/test_type 去重并合并 related_risk_titles。
+- 新增 `backend/app/tests/test_phase4_test_suggestion_agent.py`，覆盖 unit/integration 分类、重复风险合并、空输入 warning 和 max_tests 限制。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 138 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-011 的开发、审核、测试和评测闭环。
+
+### 2026-06-06 工作记录 054
+
+- 继续完成 P4-012：实现 Review Report Writer。
+- 扩展 `backend/app/services/review/agents.py`，新增 `ReviewReport` 和 `write_review_report`。
+- Report Writer 只消费 verified risks 和 suggested_tests，不把 missing/unsupported risks 写入最终报告。
+- 输出结构化 JSON 字段 summary、risk_level、risks、impacted_symbols、suggested_tests、citations、markdown 和 warnings；Markdown 固定包含 Summary、Risk Level、Risks、Suggested Tests 和 Citations。
+- 结构化 risks 不包含 `diff_refs`；citations 只包含风险实际引用的 evidence。
+- 新增 `backend/app/tests/test_phase4_review_report_writer.py`，覆盖结构化 JSON、Markdown、空报告和 citation 过滤。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 141 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-012 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 055
+
+- 自动化 `repolens-phase-4` 触发，继续推进 Phase 4 剩余任务 P4-013/P4-014。
+- 先复核 `docs/p0-plus-development-plan.md` 的 Phase 4 范围和既有实现状态，确认 P4-001 到 P4-012 已完成，剩余 Review Panel 与工具调用展示。
+- 自查发现 Review API 若仍停留在 pending 空报告，前端 Review Panel 无法形成 Phase 4 演示闭环；因此在不扩展到 Phase 5、不引入后台队列、不实现完整 MCP Server、不执行真实命令的前提下，将已完成的 Phase 4 能力收束为同步 Review 流水线。
+- 更新 `backend/app/services/review/service.py`，新增 `run_review_task`：同步执行 analyze_diff、Diff 到 symbol 映射、code_search、最多 3 个 get_symbol_context、可选 run_safe_static_check、Risk Reviewer、Review Verifier、Test Suggestion Agent 和 Review Report Writer。
+- Review 流水线写入 `tool_calls` 表，并在 `agent_traces` 中保存 tool call summary；失败时 task 标记为 failed 并保留错误信息。
+- 更新 `backend/app/api/reviews.py`，`POST /api/repositories/{repository_id}/reviews` 创建 task 后同步执行 Review 并返回 completed/failed response。
+- 更新 `backend/app/schemas/review.py` 和 `backend/app/services/review/service.py`，将 `impacted_symbols` 对齐为字符串列表，避免报告字段被过滤。
+- 更新 `backend/app/tests/test_phase4_review_api.py`，覆盖 completed Review report、risk_level、risks、markdown、tool_calls、traces 和 task 持久化。
+- 更新 `frontend/types/workbench.ts`，新增 Review request/response、risk、suggested test、citation 和 tool call 类型。
+- 更新 `frontend/lib/api.ts`，新增 `createReview` 和 `getReview` API helper。
+- 更新 `frontend/app/page.tsx`，将工作台阶段标识更新为 Phase 4，新增 Review Panel，支持 diff 输入、top_k、BM25/vector/graph/static check toggles、summary、risk_level、risks、suggested_tests、citations、markdown、错误态和运行态。
+- 新增前端 Tool Calls Panel，展示 tool_name、status、permission_decision、latency_ms、input_summary、output_summary 和 error_message。
+- 更新 Trace Panel，将 tool_calls 从原始 JSON 改为结构化行展示，满足 P4-014 对 tool_name、permission 和 latency 的展示要求。
+- 验证结果：前端 `npm run build` 通过；后端 `ruff check app` 通过；后端 `pytest app\\tests` 通过 141 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase4-detailed-design.md`、`docs/phase4-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P4-013/P4-014 以及 Review API 收束的开发、审核、测试和评测闭环。
+- Phase 4 P4-DESIGN、P4-001 到 P4-014 已全部完成。
+
+### 2026-06-08 工作记录 056
+
+- 用户要求“同样的思路 推进phase5”。
+- 核对 `docs/p0-plus-development-plan.md` 中 Phase 5 任务清单，确认范围为 P5-001 到 P5-012：评测数据格式、50 条样例、三种检索策略评测、指标计算、Evaluation Panel、Docker Compose、README、演示仓库、演示问题和截图材料。
+- 创建 heartbeat 自动化 `repolens-phase-5`，每 10 分钟继续推进 Phase 5。
+- 新增 `docs/phase5-detailed-design.md`，覆盖评测数据 JSONL schema、50 条样例分布、Evaluation 数据模型、vector_only/bm25_vector/bm25_vector_graph 策略、Hit@5、MRR、引用覆盖率、延迟、token 指标、Evaluation Service/API/Panel、Docker Compose、README、演示仓库、演示问题、截图、安全边界、测试策略和验收标准。
+- 新增 `docs/phase5-closed-loop-log.md`，按 P5-DESIGN、P5-CLOSED-LOOP 和 P5-001 到 P5-012 建立开发、审核、测试和评测记录。
+- 更新 `docs/development-worklog.md`，将当前阶段切换为 Phase 5，并记录 Phase 5 设计与闭环文档已完成。
+- 当前尚未实现 P5 代码和数据集；下一步按详细设计进入 P5-001：评测数据格式、dataset loader 和校验。
+
+### 2026-06-08 工作记录 057
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-001：设计评测数据格式，实现 dataset schema、loader 和校验。
+- 新增 `backend/app/services/evaluation/dataset.py`，实现 `EvaluationSampleType`、`EvaluationDatasetError`、`EvaluationSample`、`EvaluationDataset`、`load_evaluation_dataset` 和 `parse_evaluation_sample`。
+- 更新 `backend/app/services/evaluation/__init__.py`，导出 Phase 5 dataset loader 相关类型和函数。
+- P5-001 loader 支持 JSONL 数据集读取、空行跳过、非法 JSON 报错、空数据集拒绝、重复 id 拒绝、type 枚举校验、expected_files 必填、review 类型 review_diff 必填。
+- 路径安全校验拒绝绝对路径、Windows drive 前缀、`..` 路径穿越、空路径和非字符串列表；保持 P5-001 只做数据格式，不提前进入 P5-002 的 50 条样例或 P5-003 Runner。
+- 新增 `backend/app/tests/test_phase5_dataset.py`，覆盖正常 JSONL、字符串/路径规范化、review_diff 必填、重复 ID、非法 type、空 expected_files、非列表字段、路径穿越、绝对路径、非法 JSON、空数据集、缺失文件和目录输入。
+- 自查修复：首次测试暴露 `/absolute/path.py` 在 Windows 下 `Path.is_absolute()` 判断不足，已补充显式 `/` 前缀和 drive 前缀拒绝。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 155 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-001 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 058
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-002：准备 50 条评测样例。
+- 新增 `evals/datasets/p0_plus_eval.jsonl`，共 50 条 JSONL 样例。
+- 数据集分布严格符合 P0+ 计划：20 条 `location`、10 条 `explanation`、10 条 `architecture`、10 条 `review`。
+- 数据集覆盖两个演示仓库 key：`python_demo` 与 `ts_demo`，为后续 P5-010 演示仓库准备提供固定评测目标。
+- 10 条 Review 样例均包含 unified diff，覆盖 token 过期边界、折扣校验、retry cap、audit 写入、敏感文件过滤、前端错误处理、loading 状态、空 diff、localStorage fallback 和 evidence score 展示。
+- 新增 `backend/app/tests/test_phase5_dataset_fixture.py`，验证真实数据集总数、类型分布、repository_key 覆盖、expected_symbols 数量、review diff 格式和 ID 分组唯一性。
+- P5-002 保持在数据集准备范围内，没有提前实现 vector_only Runner、指标计算、Evaluation API 或 Evaluation Panel。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 159 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-002 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 059
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-003：实现 vector_only 评测。
+- 新增 `backend/app/services/evaluation/runner.py`，定义 `VECTOR_ONLY_STRATEGY`、`VECTOR_ONLY_TOP_K`、`EvaluationEvidenceRef`、`VectorOnlyEvaluationResult` 和 `run_vector_only_sample`。
+- `run_vector_only_sample` 固定调用既有 `retrieve_repository`，参数为 `use_bm25=false`、`use_vector=true`、`use_graph=false`，严格保持 vector_only 语义。
+- 无 embedding 配置时，Runner 记录 `vector_disabled_reason` 并暴露 `vector_unavailable=true`，不会用 BM25 fallback 冒充 vector_only。
+- Review 类型样例的 query 会拼接 question、expected_files 和 expected_symbols；正式 Review 指标计算仍留给 P5-006。
+- 新增 `backend/app/tests/test_phase5_vector_only_runner.py`，覆盖 vector disabled、vector_only 调用参数、Review query 拼接和检索异常失败结果。
+- P5-003 未提前实现 bm25_vector、bm25_vector_graph、Hit@5、MRR、Evaluation API 或 Evaluation Panel。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 163 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-003 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 060
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-004：实现 bm25_vector 评测。
+- 扩展 `backend/app/services/evaluation/runner.py`，新增 `BM25_VECTOR_STRATEGY`、`BM25_VECTOR_TOP_K`、`BM25VectorEvaluationResult` 和 `run_bm25_vector_sample`。
+- `run_bm25_vector_sample` 固定调用既有 `retrieve_repository`，参数为 `use_bm25=true`、`use_vector=true`、`use_graph=false`，严格保持 bm25_vector 语义。
+- 无 embedding 配置时，Runner 保留 `vector_disabled_reason`，但不会让样例整体失败；BM25 命中仍会输出 Evidence refs、`bm25_count`、`evidence_count` 和 `latency_ms`。
+- Review 类型样例继续使用 question、expected_files 和 expected_symbols 拼接后的检索 query；正式 Hit@5、MRR、引用覆盖率和 token 指标仍留给 P5-006。
+- 新增 `backend/app/tests/test_phase5_bm25_vector_runner.py`，覆盖 vector disabled 下 BM25 证据保留、bm25_vector 调用参数、Review query 拼接和检索异常失败结果。
+- P5-004 未提前实现 bm25_vector_graph、指标计算、Evaluation API 或 Evaluation Panel。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 167 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-004 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 061
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-005：实现 bm25_vector_graph 评测。
+- 扩展 `backend/app/services/evaluation/runner.py`，新增 `BM25_VECTOR_GRAPH_STRATEGY`、`BM25_VECTOR_GRAPH_TOP_K`、`BM25VectorGraphEvaluationResult` 和 `run_bm25_vector_graph_sample`。
+- `run_bm25_vector_graph_sample` 固定调用既有 `retrieve_repository`，参数为 `use_bm25=true`、`use_vector=true`、`use_graph=true`，严格保持 bm25_vector_graph 语义。
+- 无 embedding 配置时，Runner 保留 `vector_disabled_reason`，同时通过 BM25 seed 执行 graph expansion；结果记录 `bm25_count`、`vector_count`、`graph_count`、`evidence_count` 和 `latency_ms`。
+- 新增 `backend/app/tests/test_phase5_bm25_vector_graph_runner.py`，覆盖 vector disabled 下图扩展证据、bm25_vector_graph 调用参数、Review query 拼接和检索异常失败结果。
+- P5-005 未提前实现 Hit@5、MRR、引用覆盖率、token 指标、Evaluation API 或 Evaluation Panel。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 171 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase5-closed-loop-log.md`、`docs/development-worklog.md` 和 `docs/phase5-detailed-design.md`，记录 P5-005 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 062
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-006：实现 Hit@5、MRR、引用覆盖率、延迟和 token 指标计算。
+- 新增 `backend/app/services/evaluation/metrics.py`，定义 `EvaluationSampleMetric`、`EvaluationAggregateMetrics`、`compute_sample_metrics`、`compute_aggregate_metrics` 和 `estimate_token_count`。
+- 单样例指标计算 Hit@5、MRR、citation_coverage、matched_files、matched_symbols、latency、真实或估算 token 和 error_message；失败样例指标归零并计入 error。
+- 聚合指标计算 hit_at_5、mrr、citation_coverage、avg/p50/p95 latency、avg_token_count、token_estimated_count 和 error_count。
+- 更新 `backend/app/services/evaluation/__init__.py`，导出 P5-006 metrics 类型和函数。
+- 新增 `backend/app/tests/test_phase5_metrics.py`，覆盖 Hit@5/MRR/coverage、expected_symbols 要求、Review additional citations、失败结果、top5 限制、聚合指标和 token 估算。
+- P5-006 未提前实现 Evaluation API、Evaluation Panel、Docker Compose 或 README。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 179 个测试，保留 1 个 Starlette/httpx deprecation warning。
+- 更新 `docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-006 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 063
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-007：实现 Evaluation Panel 和评测接口展示。
+- 新增 `backend/app/models/evaluation.py`，实现 `evaluation_runs` 和 `evaluation_results` 两张轻量持久化表，只保存指标、匹配文件、引用摘要和错误信息。
+- 新增 `backend/app/schemas/evaluation.py`、`backend/app/services/evaluation/service.py` 和 `backend/app/api/evaluations.py`，支持 `POST /api/evaluations`、`GET /api/evaluations` 和 `GET /api/evaluations/{run_id}`。
+- Evaluation API 采用同步 Runner，不引入 Celery、队列或后台调度；支持 `all`、`vector_only`、`bm25_vector`、`bm25_vector_graph`，单样例失败计入 `error_count` 不阻断全局 run。
+- 更新 `frontend/types/workbench.ts`、`frontend/lib/api.ts` 和 `frontend/app/page.tsx`，新增 Evaluation Panel，支持 dataset path、strategy、repository_key、top_k、Run、策略对比表、样例结果表和 warnings 展示。
+- 新增 `backend/app/tests/test_phase5_evaluation_api.py`，覆盖 all/single strategy、持久化查询、缺失 repository_map、repository 未 ready 和缺失 run 404。
+- P5-007 未提前实现 Docker Compose、README、演示仓库、演示问题或截图。
+- 验证结果：后端 `ruff check app` 通过，`pytest app\\tests` 通过 184 个测试，保留 1 个 Starlette/httpx deprecation warning；前端 `npm run build` 通过。
+- 更新 `docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-007 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 064
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-008：完善 Docker Compose。
+- 更新 `docker-compose.yml`，保持 P0+ 范围内的 `backend`、`frontend`、`qdrant` 三服务，配置 `repolens_data` 和 `qdrant_data` 两个 named volume。
+- 后端容器覆盖 `REPOLENS_DATABASE_URL=sqlite:////app/.repolens/repolens.sqlite`、`REPOLENS_WORKSPACE_ROOT=/app/.repolens/repos` 和 `REPOLENS_QDRANT_URL=http://qdrant:6333`；本地 `.env.example` 仍默认使用 localhost。
+- `.env.example` 补齐 `REPOLENS_EMBEDDING_*`、`REPOLENS_CHAT_*`、`REPOLENS_SAFE_STATIC_CHECK_*` 和 `NEXT_PUBLIC_API_BASE_URL`。
+- 更新 `backend/Dockerfile`、`frontend/Dockerfile`、`backend/.dockerignore` 和 `frontend/.dockerignore`；前端 Dockerfile 使用 `npm ci`、build arg、`npm run build` 和 `next start`。
+- P5-008 未提前实现 README、演示仓库、演示问题或截图。
+- 验证结果：`docker compose config` 通过；后端 `ruff check app` 通过；后端 `pytest app\\tests` 通过 184 个测试，保留 1 个 Starlette/httpx deprecation warning；前端 `npm run build` 通过。
+- 已尝试 `docker compose up -d --build`，但当前环境 Docker Desktop Linux daemon 未运行，无法连接 `dockerDesktopLinuxEngine` pipe，实际容器启动未完成。
+- 更新 `docs/phase5-detailed-design.md`、`docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-008 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 065
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-009：完善 README。
+- 将 `README.md` 从 Phase 0 工程骨架说明升级为 P0+ 完整版，覆盖项目定位、简历亮点、Mermaid 架构图、技术栈、Phase 1-5 功能清单、本地启动、Docker Compose 启动、环境变量和核心 API。
+- README 新增评测数据分布、三种检索策略、Hit@5、MRR、引用覆盖率、延迟、token、error_count 指标说明，以及 pending 状态的策略指标表。
+- README 新增截图目标、安全边界、P0+ non-goals、Demo 计划、简历 bullet 和面试讲法。
+- P5-009 未提前创建 P5-010 演示仓库、P5-011 演示问题或 P5-012 截图；未伪造正式评测分数，相关产物和分数均标记为 pending。
+- 验证结果：README 范围自查通过；后端 `ruff check app` 通过；后端 `pytest app\\tests` 通过 184 个测试，保留 1 个 Starlette/httpx deprecation warning；前端 `npm run build` 通过；`docker compose config` 通过。
+- 更新 `docs/phase5-detailed-design.md`、`docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-009 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 066
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-010：准备演示仓库。
+- 新增 `evals/demo_repos/python_service`，包含 22 个文件，覆盖 FastAPI-style routes、service 层、repository 层、auth token validation、billing、scanner filters、chunk builder、audit logger、retry helper、worker scheduler 和测试文件。
+- 新增 `evals/demo_repos/ts_webapp`，包含 21 个文件，覆盖 Next.js-style dashboard page、components、API clients、evaluation hook、review panel、tool calls panel、trace panel、persistence、routes、workspace helper 和测试文件。
+- 新增 `backend/app/tests/test_phase5_demo_repos.py`，校验两个 demo repo 存在、文件数在 20-60 范围、无 `.env` 文件、关键层文件齐备，并覆盖 `p0_plus_eval.jsonl` 50 条样例引用的 expected files。
+- 更新 `evals/README.md`，说明 Phase 5 dataset 与 demo repo 位置；更新 `README.md` Demo Plan，将 P5-010 标记为 ready，P5-011/P5-012 继续 pending。
+- P5-010 未提前创建演示问题、未录制或整理截图、未填写真正评测分数。
+- 验证结果：P5-010 专项 Ruff 通过；demo repo + dataset fixture 测试 8 passed；后端全量 `pytest app\\tests` 188 passed，保留 1 个 Starlette/httpx deprecation warning；后端全量 Ruff 通过；前端 `npm run build` 通过；`docker compose config` 通过。
+- 更新 `docs/phase5-detailed-design.md`、`docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-010 的开发、审核、测试和评测闭环。
+
+### 2026-06-08 工作记录 067
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5。
+- 按 `docs/phase5-detailed-design.md` 开发 P5-011：准备演示问题。
+- 新增 `evals/demo_questions.md`，包含 demo flow、10 条演示问题、2 条 Review diff 和 screenshot mapping。
+- 新增 `evals/datasets/demo_questions.json`，结构化记录 id、category、repository_key、repository_path、question、expected_answer_focus、suggested_demo_flow、screenshot_target、expected_files、expected_symbols 和 review_diff。
+- 10 条问题覆盖 architecture、location、explanation、impact、review 五类，覆盖 `python_demo` 与 `ts_demo`；4 条 impact/review 问题包含合法 unified diff。
+- 更新 `README.md` Demo Plan，将 P5-011 标记为 ready；更新 `evals/README.md`，说明 demo questions 文档和 JSON 数据集位置。
+- 新增 `backend/app/tests/test_phase5_demo_questions.py`，校验问题数量、类别覆盖、repo 覆盖、必填字段、expected files 存在、review/impact diff 格式和 Markdown/JSON 对齐。
+- P5-011 未提前录制或整理截图、未填写真正评测分数、未扩展超出 P0+ 的演示流程。
+- 验证结果：P5-011 专项 Ruff 通过；demo questions + demo repo 测试 8 passed；后端全量 `pytest app\\tests` 192 passed，保留 1 个 Starlette/httpx deprecation warning；后端全量 Ruff 通过；前端 `npm run build` 通过；`docker compose config` 通过。
+- 更新 `docs/phase5-detailed-design.md`、`docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，记录 P5-011 的开发、审核、测试和评测闭环。
+
 ## 5. 当前项目状态
 
 - 项目方向：已确定。
@@ -508,12 +821,27 @@ Codex 检查当前工作区，发现工作区为空。随后创建 `docs` 目录
 - 大厂简历适配审核：已完成初版。
 - 设计阶段收口评审：已完成初版。
 - 对话日志机制：已建立。
-- 代码实现：Phase 1 已完成 P1-001 到 P1-012，Phase 2 已完成详细设计与 P2-001 到 P2-011。
-- 代码实现：Phase 1、Phase 2、Phase 3 均已完成；Phase 3 已完成 P3-001 到 P3-011。
+- 代码实现：Phase 1、Phase 2、Phase 3 均已完成。
+- 代码实现：Phase 4 已完成详细设计、闭环记录和 P4-001 到 P4-014。
+- 代码实现：Phase 5 已完成 P5-DESIGN、P5-CLOSED-LOOP、P5-001 至 P5-012，P0+ 闭环完成。
 
 ## 6. 下一步建议
 
-1. 按 `docs/p0-plus-development-plan.md` 继续 Phase 3：带引用仓库问答。
-2. 下一步按 `docs/p0-plus-development-plan.md` 进入 Phase 4：PR Review、Multi-Agent 与 MCP-style 工具调用。
-3. 进入 Phase 4 前应先创建 Phase 4 详细设计文档和闭环记录，再按 P4 任务清单开发，不扩展 P0+ 范围。
-4. 后续开发严格按 Phase 顺序推进，不再扩展 P0+ 范围。
+1. Phase 5 已完成；下一步仅在用户明确要求时进入 P0+ 外扩展、优化或发布打磨。
+2. 后续扩展继续保持先设计、再开发、再审核测试评测闭环。
+3. 不在未确认范围时扩展完整 MCP Server、复杂自治 Multi-Agent 或真实命令执行。
+
+## 25. 2026-06-08 Phase 5 P5-012 演示截图与最终闭环
+
+- 自动化 `repolens-phase-5` 触发，继续推进 Phase 5 最后一项 P5-012：录制或整理演示截图。
+- 启动本地 backend/frontend，导入并使用 `python_demo` 与 `ts_demo` 两个 demo repo；两个仓库均 ready。
+- 修正 Evaluation API 的 dataset path 解析，使 `evals/datasets/p0_plus_eval.jsonl` 可从 backend cwd 和 repo root 场景稳定解析。
+- 修正前端 Evaluation 默认 repository key 为 `python_demo,ts_demo`，并在缺失 repo key 时给出明确错误。
+- 修正 Workbench 阶段标识为 `Phase 5`，为 demo 输入提供默认检索词、默认 Ask 问题和默认 Review diff。
+- 修正前端长表格、长报告和代码块的横向溢出，保证 1440px 宽视口下截图可读。
+- 在 Workbench 中完成 Evaluation `all` 策略 demo run：50 samples x 3 strategies，写入 README 的真实指标为 vector_only 0% Hit@5、bm25_vector 92% Hit@5、bm25_vector_graph 90% Hit@5。
+- 在 Workbench 中生成 Ask citations、Review risk/suggested tests/citations、Tool Calls 和 Evidence Panel 状态。
+- 新增 6 张截图到 `docs/assets/screenshots/`：repository status、Evaluation Panel、Ask + Trace、Review Panel、Tool Calls、Evidence Panel。
+- 更新 `README.md`，将 Phase 5 标记为 Done，Demo Plan 的 P5-012 标记为 ready，并将截图路径改为实际文件。
+- 更新 `evals/README.md`、`docs/phase5-detailed-design.md`、`docs/phase5-closed-loop-log.md` 和 `docs/development-worklog.md`，形成 P5-012 开发、审核、测试、评测闭环。
+- 验证结果：P5-012 专项 Ruff 通过；P5-012 Evaluation API 专项测试 6 passed；截图完成视觉抽查。

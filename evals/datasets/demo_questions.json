@@ -1,0 +1,273 @@
+[
+  {
+    "id": "demo-arch-001",
+    "category": "architecture",
+    "repository_key": "python_demo",
+    "repository_path": "evals/demo_repos/python_service",
+    "question": "Describe the request flow from the task creation API route to service, repository, and audit logging.",
+    "expected_answer_focus": [
+      "app/api/tasks.py create_task receives the API payload",
+      "TaskService.create_task validates the title and coordinates business logic",
+      "TaskRepository.save_task persists the task record",
+      "AuditLogger.record_event writes the task.created audit event"
+    ],
+    "suggested_demo_flow": [
+      "Import the Python demo repository",
+      "Ask the question from the Ask Panel",
+      "Open Evidence Panel and confirm API, service, repository, and audit files are cited",
+      "Open Trace Panel and point out retrieval and report writing steps"
+    ],
+    "screenshot_target": "ask-trace-panel",
+    "expected_files": [
+      "app/api/tasks.py",
+      "app/services/tasks.py",
+      "app/repositories/tasks.py",
+      "app/audit/logger.py"
+    ],
+    "expected_symbols": [
+      "create_task",
+      "TaskService",
+      "TaskRepository",
+      "AuditLogger"
+    ],
+    "review_diff": null
+  },
+  {
+    "id": "demo-loc-001",
+    "category": "location",
+    "repository_key": "python_demo",
+    "repository_path": "evals/demo_repos/python_service",
+    "question": "Where is repository import implemented and which scanner/chunking modules does it call?",
+    "expected_answer_focus": [
+      "RepositoryImportService.import_repository is in app/services/repositories.py",
+      "The service calls scan_repository from app/scanner/scanner.py",
+      "The service calls build_chunks from app/chunking/builder.py"
+    ],
+    "suggested_demo_flow": [
+      "Ask the location question",
+      "Open Evidence Panel",
+      "Show that the answer cites service, scanner, and chunk builder files"
+    ],
+    "screenshot_target": "evidence-panel",
+    "expected_files": [
+      "app/services/repositories.py",
+      "app/scanner/scanner.py",
+      "app/chunking/builder.py"
+    ],
+    "expected_symbols": [
+      "RepositoryImportService",
+      "import_repository",
+      "scan_repository",
+      "build_chunks"
+    ],
+    "review_diff": null
+  },
+  {
+    "id": "demo-exp-001",
+    "category": "explanation",
+    "repository_key": "python_demo",
+    "repository_path": "evals/demo_repos/python_service",
+    "question": "Explain how invoice totals handle line items, tax, and discount validation.",
+    "expected_answer_focus": [
+      "LineItem.total multiplies unit price and quantity",
+      "calculate_invoice_total clamps discount to non-negative values",
+      "The function sums line items, applies tax, then subtracts discount"
+    ],
+    "suggested_demo_flow": [
+      "Ask the explanation question",
+      "Show cited lines from app/billing/invoices.py",
+      "Use Trace Panel to explain how evidence was selected"
+    ],
+    "screenshot_target": "ask-trace-panel",
+    "expected_files": [
+      "app/billing/invoices.py"
+    ],
+    "expected_symbols": [
+      "LineItem",
+      "calculate_invoice_total"
+    ],
+    "review_diff": null
+  },
+  {
+    "id": "demo-impact-001",
+    "category": "impact",
+    "repository_key": "python_demo",
+    "repository_path": "evals/demo_repos/python_service",
+    "question": "If token expiration changes from `<= now` to `< now`, what behavior and tests are affected?",
+    "expected_answer_focus": [
+      "validate_access_token currently rejects tokens whose expires_at equals now",
+      "Changing to < now allows boundary-expired tokens",
+      "Auth boundary tests should cover expires_at == now"
+    ],
+    "suggested_demo_flow": [
+      "Ask the impact question with the diff in context",
+      "Open Review Panel to show the risk",
+      "Point to citations in app/auth/tokens.py"
+    ],
+    "screenshot_target": "review-panel",
+    "expected_files": [
+      "app/auth/tokens.py"
+    ],
+    "expected_symbols": [
+      "validate_access_token"
+    ],
+    "review_diff": "diff --git a/app/auth/tokens.py b/app/auth/tokens.py\n--- a/app/auth/tokens.py\n+++ b/app/auth/tokens.py\n@@ -18,7 +18,7 @@ def validate_access_token(token: str, now: datetime) -> TokenClaims:\n-    if claims.expires_at <= now:\n+    if claims.expires_at < now:\n         raise AuthError(\"token expired\")\n     return claims\n"
+  },
+  {
+    "id": "demo-review-001",
+    "category": "review",
+    "repository_key": "python_demo",
+    "repository_path": "evals/demo_repos/python_service",
+    "question": "Review the discount validation removal in `app/billing/invoices.py`.",
+    "expected_answer_focus": [
+      "Removing max(discount, Decimal(\"0\")) allows negative discounts",
+      "Negative discounts can increase invoice totals unexpectedly",
+      "Add tests for negative discount and zero discount boundaries"
+    ],
+    "suggested_demo_flow": [
+      "Paste the review diff into Review Panel",
+      "Show Risk Reviewer and Review Verifier output",
+      "Show suggested billing tests and cited evidence"
+    ],
+    "screenshot_target": "review-panel",
+    "expected_files": [
+      "app/billing/invoices.py"
+    ],
+    "expected_symbols": [
+      "calculate_invoice_total"
+    ],
+    "review_diff": "diff --git a/app/billing/invoices.py b/app/billing/invoices.py\n--- a/app/billing/invoices.py\n+++ b/app/billing/invoices.py\n@@ -15,7 +15,7 @@ def calculate_invoice_total(items: list[LineItem], discount: Decimal) -> Decimal:\n-    discount = max(discount, Decimal(\"0\"))\n+    discount = discount\n     subtotal = sum(item.total for item in items)\n     tax = subtotal * Decimal(\"0.08\")\n     return subtotal + tax - discount\n"
+  },
+  {
+    "id": "demo-arch-002",
+    "category": "architecture",
+    "repository_key": "ts_demo",
+    "repository_path": "evals/demo_repos/ts_webapp",
+    "question": "Describe the frontend data flow from DashboardPage to RepositoryList and the repository API client.",
+    "expected_answer_focus": [
+      "DashboardPage awaits fetchRepositories",
+      "RepositoryList renders repository name and status",
+      "fetchRepositories reads /api/repositories"
+    ],
+    "suggested_demo_flow": [
+      "Import the TypeScript demo repository",
+      "Ask the architecture question",
+      "Show DashboardPage, RepositoryList, and repositories client citations"
+    ],
+    "screenshot_target": "ask-trace-panel",
+    "expected_files": [
+      "src/app/dashboard/page.tsx",
+      "src/components/repository-list.tsx",
+      "src/lib/repositories.ts"
+    ],
+    "expected_symbols": [
+      "DashboardPage",
+      "RepositoryList",
+      "fetchRepositories"
+    ],
+    "review_diff": null
+  },
+  {
+    "id": "demo-loc-002",
+    "category": "location",
+    "repository_key": "ts_demo",
+    "repository_path": "evals/demo_repos/ts_webapp",
+    "question": "Where are evidence cards displayed and how is score precision rendered?",
+    "expected_answer_focus": [
+      "EvidencePanel is in src/components/evidence-panel.tsx",
+      "It renders file path, snippet, source, and score",
+      "Score precision uses evidence.score.toFixed(3)"
+    ],
+    "suggested_demo_flow": [
+      "Ask the location question",
+      "Open Evidence Panel",
+      "Show the score rendering line in evidence-panel.tsx"
+    ],
+    "screenshot_target": "evidence-panel",
+    "expected_files": [
+      "src/components/evidence-panel.tsx"
+    ],
+    "expected_symbols": [
+      "EvidencePanel"
+    ],
+    "review_diff": null
+  },
+  {
+    "id": "demo-exp-002",
+    "category": "explanation",
+    "repository_key": "ts_demo",
+    "repository_path": "evals/demo_repos/ts_webapp",
+    "question": "Explain how `useEvaluation` manages loading, result, and error state.",
+    "expected_answer_focus": [
+      "useEvaluation stores loading, error, and result in React state",
+      "run sets loading true, clears error, calls runEvaluation, then updates result",
+      "Errors are normalized through readError and loading is cleared"
+    ],
+    "suggested_demo_flow": [
+      "Ask the explanation question",
+      "Show use-evaluation.ts evidence",
+      "Open Evaluation Panel to connect hook behavior to the UI"
+    ],
+    "screenshot_target": "evaluation-panel",
+    "expected_files": [
+      "src/hooks/use-evaluation.ts",
+      "src/lib/evaluations.ts"
+    ],
+    "expected_symbols": [
+      "useEvaluation",
+      "runEvaluation"
+    ],
+    "review_diff": null
+  },
+  {
+    "id": "demo-impact-002",
+    "category": "impact",
+    "repository_key": "ts_demo",
+    "repository_path": "evals/demo_repos/ts_webapp",
+    "question": "What breaks if invalid persisted workspace JSON throws instead of falling back to default state?",
+    "expected_answer_focus": [
+      "restoreWorkspaceState currently catches invalid JSON",
+      "Throwing would make corrupt localStorage break workspace restore",
+      "Tests should cover invalid persisted state"
+    ],
+    "suggested_demo_flow": [
+      "Ask the impact question",
+      "Show persistence.ts and persistence.test.ts",
+      "Use Ask + Trace screenshot target"
+    ],
+    "screenshot_target": "ask-trace-panel",
+    "expected_files": [
+      "src/lib/persistence.ts",
+      "tests/persistence.test.ts"
+    ],
+    "expected_symbols": [
+      "restoreWorkspaceState"
+    ],
+    "review_diff": "diff --git a/src/lib/persistence.ts b/src/lib/persistence.ts\n--- a/src/lib/persistence.ts\n+++ b/src/lib/persistence.ts\n@@ -10,7 +10,7 @@ export function restoreWorkspaceState(raw: string | null): WorkspaceState {\n   try {\n     return raw ? JSON.parse(raw) : defaultState;\n   } catch {\n-    return defaultState;\n+    throw new Error(\"invalid state\");\n   }\n }\n"
+  },
+  {
+    "id": "demo-review-002",
+    "category": "review",
+    "repository_key": "ts_demo",
+    "repository_path": "evals/demo_repos/ts_webapp",
+    "question": "Review the empty diff guard change in `ReviewPanel`.",
+    "expected_answer_focus": [
+      "Replacing diff.trim() with diff lets whitespace-only diffs through",
+      "The disabled button still uses trim but submitReview becomes easier to misuse",
+      "Add a UI/unit test for whitespace-only diff submission"
+    ],
+    "suggested_demo_flow": [
+      "Paste the review diff into Review Panel",
+      "Show risk, suggested test, citation, and tool calls",
+      "Capture Review Panel in P5-012"
+    ],
+    "screenshot_target": "review-panel",
+    "expected_files": [
+      "src/components/review-panel.tsx"
+    ],
+    "expected_symbols": [
+      "ReviewPanel"
+    ],
+    "review_diff": "diff --git a/src/components/review-panel.tsx b/src/components/review-panel.tsx\n--- a/src/components/review-panel.tsx\n+++ b/src/components/review-panel.tsx\n@@ -9,7 +9,7 @@ export function ReviewPanel() {\n   const [status, setStatus] = useState(\"idle\");\n \n   async function submitReview() {\n-    if (!diff.trim()) return;\n+    if (!diff) return;\n     setStatus(\"loading\");\n     await createReview({ diff });\n     setStatus(\"submitted\");\n"
+  }
+]
