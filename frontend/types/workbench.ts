@@ -163,6 +163,44 @@ export type ReviewCreateRequest = {
   run_static_check?: boolean;
 };
 
+export type MultiAgentReviewCreateRequest = ReviewCreateRequest & {
+  round_limit?: number;
+  assignment_limit?: number;
+  token_budget?: number;
+};
+
+export type ChangeRequestReviewCreateRequest = {
+  url: string;
+  top_k?: number;
+  use_bm25?: boolean;
+  use_vector?: boolean;
+  use_graph?: boolean;
+  run_static_check?: boolean;
+};
+
+export type ChangeRequestMetadata = {
+  id: string;
+  repository_id: string;
+  task_id: string | null;
+  platform: string;
+  change_type: string;
+  owner: string;
+  repo: string;
+  number: string;
+  url: string;
+  title: string;
+  author: string | null;
+  source_branch: string | null;
+  target_branch: string | null;
+  state: string | null;
+  changed_file_count: number;
+  addition_count: number;
+  deletion_count: number;
+  commit_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ReviewLocation = {
   file_path: string;
   start_line: number;
@@ -215,6 +253,34 @@ export type ReviewToolCall = {
   completed_at: string | null;
 };
 
+export type McpToolInfo = {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  permission_policy: string;
+  enabled: boolean;
+};
+
+export type McpToolCallAudit = {
+  id: string;
+  task_id: string;
+  repository_id: string;
+  tool_name: string;
+  status: string;
+  permission_decision: string;
+  permission_policy: string | null;
+  client_name: string | null;
+  client_session_id: string | null;
+  input_hash: string | null;
+  output_hash: string | null;
+  input_summary: string;
+  output_summary: string | null;
+  latency_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 export type ReviewTaskResponse = {
   task_id: string;
   repository_id: string;
@@ -233,6 +299,100 @@ export type ReviewTaskResponse = {
   completed_at: string | null;
 };
 
+export type ChangeRequestReviewResponse = {
+  change_request: ChangeRequestMetadata;
+  review: ReviewTaskResponse;
+};
+
+export type AgentSessionResponse = {
+  id: string;
+  task_id: string;
+  repository_id: string;
+  status: string;
+  mode: string;
+  round_limit: number;
+  assignment_limit: number;
+  token_budget: number | null;
+  summary: string | null;
+  final_report: Record<string, unknown> | null;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type AgentAssignmentResponse = {
+  id: string;
+  session_id: string;
+  agent_name: string;
+  role: string;
+  status: string;
+  round_index: number;
+  input_payload: Record<string, unknown>;
+  output_payload: Record<string, unknown> | null;
+  evidence_ids: string[];
+  dissent: Record<string, unknown> | null;
+  confidence: number;
+  token_estimate: number;
+  latency_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type AgentMessageResponse = {
+  id: string;
+  session_id: string;
+  assignment_id: string | null;
+  sender: string;
+  recipient: string;
+  message_type: string;
+  round_index: number;
+  content: string;
+  evidence_ids: string[];
+  claims: string[];
+  confidence: number;
+  requires_arbitration: boolean;
+  created_at: string;
+};
+
+export type MultiAgentComparison = {
+  baseline?: string;
+  variant?: string;
+  assignment_count?: number;
+  message_count?: number;
+  dissent_count?: number;
+  token_estimate?: number;
+  round_limit?: number;
+  assignment_limit?: number;
+  arbiter_resolution?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type MultiAgentReviewResponse = {
+  task_id: string;
+  repository_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  session: AgentSessionResponse;
+  assignments: AgentAssignmentResponse[];
+  messages: AgentMessageResponse[];
+  summary: string | null;
+  risk_level: string | null;
+  risks: ReviewRisk[];
+  impacted_symbols?: string[];
+  suggested_tests: ReviewSuggestedTest[];
+  citations: ReviewCitation[];
+  markdown: string | null;
+  arbiter_decision: Record<string, unknown>;
+  dissent: Array<Record<string, unknown>>;
+  comparison: MultiAgentComparison;
+  warnings: string[];
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 export type EvaluationStrategy = "all" | "vector_only" | "bm25_vector" | "bm25_vector_graph";
 
 export type EvaluationCreateRequest = {
@@ -240,6 +400,16 @@ export type EvaluationCreateRequest = {
   dataset_path: string;
   strategy: EvaluationStrategy;
   repository_map: Record<string, string>;
+  top_k?: number;
+};
+
+export type V1BenchmarkCreateRequest = {
+  name?: string;
+  dataset_path: string;
+  repository_map: Record<string, string>;
+  include_review?: boolean;
+  include_multi_agent?: boolean;
+  include_mcp?: boolean;
   top_k?: number;
 };
 
@@ -297,3 +467,30 @@ export type EvaluationRunSummary = Omit<
   EvaluationRunResponse,
   "repository_map" | "results" | "warnings" | "started_at"
 >;
+
+export type V1BenchmarkSampleResult = {
+  sample_id: string;
+  repository_key: string;
+  platform: string;
+  change_type: string;
+  title: string;
+  review: Record<string, unknown> | null;
+  multi_agent: Record<string, unknown> | null;
+  mcp: Array<Record<string, unknown>>;
+  errors: string[];
+};
+
+export type V1BenchmarkResponse = {
+  run_id: string;
+  name: string;
+  dataset_path: string;
+  status: "completed" | "failed";
+  sample_count: number;
+  repository_map: Record<string, string>;
+  metrics: Record<string, Record<string, unknown> | null>;
+  results: V1BenchmarkSampleResult[];
+  warnings: string[];
+  report_markdown: string;
+  created_at: string;
+  completed_at: string;
+};

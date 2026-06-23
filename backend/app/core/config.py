@@ -3,6 +3,8 @@ from functools import lru_cache
 import os
 from pathlib import Path
 
+DEFAULT_CHANGE_REQUEST_MAX_DIFF_CHARS = 200_000
+
 
 def _split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
@@ -66,6 +68,30 @@ class Settings:
                 "python_ast_parse",
             )
         )
+    )
+    change_request_timeout_seconds: float = field(
+        default_factory=lambda: _optional_float(
+            os.getenv("REPOLENS_CHANGE_REQUEST_TIMEOUT_SECONDS", "")
+        )
+        or 30.0
+    )
+    change_request_max_diff_chars: int = field(
+        default_factory=lambda: _optional_int(
+            os.getenv("REPOLENS_CHANGE_REQUEST_MAX_DIFF_CHARS", "")
+        )
+        or DEFAULT_CHANGE_REQUEST_MAX_DIFF_CHARS
+    )
+    github_token: str = field(default_factory=lambda: os.getenv("REPOLENS_GITHUB_TOKEN", ""))
+    github_base_url: str = field(
+        default_factory=lambda: os.getenv("REPOLENS_GITHUB_BASE_URL", "https://api.github.com")
+    )
+    gitee_token: str = field(default_factory=lambda: os.getenv("REPOLENS_GITEE_TOKEN", ""))
+    gitee_base_url: str = field(
+        default_factory=lambda: os.getenv("REPOLENS_GITEE_BASE_URL", "https://gitee.com/api/v5")
+    )
+    gitlab_token: str = field(default_factory=lambda: os.getenv("REPOLENS_GITLAB_TOKEN", ""))
+    gitlab_base_url: str = field(
+        default_factory=lambda: os.getenv("REPOLENS_GITLAB_BASE_URL", "https://gitlab.com/api/v4")
     )
 
 

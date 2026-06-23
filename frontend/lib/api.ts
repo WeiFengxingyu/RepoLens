@@ -1,7 +1,13 @@
 import type {
+  ChangeRequestReviewCreateRequest,
+  ChangeRequestReviewResponse,
   EvaluationCreateRequest,
   EvaluationRunResponse,
   EvaluationRunSummary,
+  McpToolCallAudit,
+  McpToolInfo,
+  MultiAgentReviewCreateRequest,
+  MultiAgentReviewResponse,
   QACreateRequest,
   QATaskResponse,
   ReviewCreateRequest,
@@ -11,7 +17,9 @@ import type {
   RepositoryStatusResponse,
   RepositorySummary,
   RetrievalRequest,
-  RetrievalResponse
+  RetrievalResponse,
+  V1BenchmarkCreateRequest,
+  V1BenchmarkResponse
 } from "@/types/workbench";
 
 export const API_BASE_URL =
@@ -78,8 +86,38 @@ export async function createReview(
   });
 }
 
+export async function createChangeRequestReview(
+  repositoryId: string,
+  payload: ChangeRequestReviewCreateRequest
+): Promise<ChangeRequestReviewResponse> {
+  return request<ChangeRequestReviewResponse>(
+    `${API_ROUTES.repositories}/${repositoryId}/change-requests/reviews`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function createMultiAgentReview(
+  repositoryId: string,
+  payload: MultiAgentReviewCreateRequest
+): Promise<MultiAgentReviewResponse> {
+  return request<MultiAgentReviewResponse>(
+    `${API_ROUTES.repositories}/${repositoryId}/multi-agent-reviews`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
 export async function getReview(taskId: string): Promise<ReviewTaskResponse> {
   return request<ReviewTaskResponse>(`/api/reviews/${taskId}`);
+}
+
+export async function getMultiAgentReview(taskId: string): Promise<MultiAgentReviewResponse> {
+  return request<MultiAgentReviewResponse>(`/api/multi-agent-reviews/${taskId}`);
 }
 
 export async function createEvaluation(
@@ -97,6 +135,23 @@ export async function listEvaluations(): Promise<EvaluationRunSummary[]> {
 
 export async function getEvaluation(runId: string): Promise<EvaluationRunResponse> {
   return request<EvaluationRunResponse>(`/api/evaluations/${runId}`);
+}
+
+export async function createV1Benchmark(
+  payload: V1BenchmarkCreateRequest
+): Promise<V1BenchmarkResponse> {
+  return request<V1BenchmarkResponse>("/api/v1-benchmarks", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listMcpTools(): Promise<McpToolInfo[]> {
+  return request<McpToolInfo[]>("/api/mcp/tools");
+}
+
+export async function listMcpToolCalls(limit = 50): Promise<McpToolCallAudit[]> {
+  return request<McpToolCallAudit[]>(`/api/mcp/tool-calls?limit=${limit}`);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -118,9 +173,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function readErrorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { detail?: string };
-    return body.detail ?? `Request failed with ${response.status}`;
+    const body = (await response.json()) as { detail?: unknown };
+    return normalizeErrorDetail(body.detail, response.status);
   } catch {
     return `Request failed with ${response.status}`;
   }
+}
+
+function normalizeErrorDetail(detail: unknown, status: number): string {
+  if (typeof detail === "string" && detail.trim()) {
+    return redactSensitiveText(detail);
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (item && typeof item === "object" && "msg" in item) {
+          const message = (item as { msg?: unknown }).msg;
+          return typeof message === "string" ? message : "";
+        }
+        return "";
+      })
+      .filter(Boolean);
+    if (messages.length) {
+      return redactSensitiveText(messages.join("; "));
+    }
+  }
+  return `Request failed with ${status}`;
+}
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/authorization\s*[:=]\s*bearer\s+[^\s,;]+/gi, "Authorization: Bearer [redacted]")
+    .replace(/bearer\s+[^\s,;]+/gi, "Bearer [redacted]");
 }

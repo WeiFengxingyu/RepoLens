@@ -79,8 +79,18 @@ class Repository(Base):
         back_populates="repository",
         cascade="all, delete-orphan",
     )
+    change_requests: Mapped[list["ChangeRequest"]] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+    )
+    agent_sessions: Mapped[list["AgentSession"]] = relationship(
+        back_populates="repository",
+        cascade="all, delete-orphan",
+    )
 
 
+from app.models.agent_session import AgentSession  # noqa: E402
+from app.models.change_request import ChangeRequest  # noqa: E402
 from app.models.code_chunk import CodeChunk  # noqa: E402
 from app.models.code_relation import CodeRelation  # noqa: E402
 from app.models.task import Task  # noqa: E402

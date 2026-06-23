@@ -6,10 +6,10 @@
 
 ## 2. 当前阶段
 
-- 当前阶段：Phase 5 - 评测、部署与简历包装
-- 当前状态：Phase 5 已完成 P5-DESIGN、P5-CLOSED-LOOP、P5-001 至 P5-012，P0+ 闭环完成
+- 当前阶段：V1 Phase 7 - 真正 MCP Server 化与工具权限系统增强
+- 当前状态：Phase 7 已完成；RepoLens 已具备 HTTP JSON-RPC MCP endpoint、Tool Registry、权限审计和 Tool Permissions Panel
 - 开始日期：2026-06-05
-- 完成日期：2026-06-05
+- 完成日期：2026-06-14（Phase 7）
 
 ## 3. Phase 0 任务记录
 
@@ -496,3 +496,309 @@
 - P5-012：最终全量 `.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，193 个测试通过，1 个 Starlette/httpx deprecation warning。
 - P5-012：最终 `npm run build` 通过。
 - P5-012：最终 `docker compose config` 通过。
+
+## 20. Phase 6 任务记录
+
+| 编号 | 任务 | 状态 | 记录 |
+| --- | --- | --- | --- |
+| P6-DESIGN | Phase 6 详细设计 | 完成 | 创建 `docs/phase6-detailed-design.md`，覆盖多平台 Change Request Provider、GitHub 首个适配器、Gitee/GitLab/self-hosted GitLab 预留、API、数据模型、前端、安全、测试、评测和验收标准 |
+| P6-CLOSED-LOOP | Phase 6 闭环记录 | 完成 | 创建 `docs/phase6-closed-loop-log.md`，按 P6-001 到 P6-012 建立开发、审核、测试和评测记录表 |
+| P6-001 | 编写 Phase 6 详细设计 | 完成 | 已完成 Phase 6 详细设计和文档审查；尚未进入代码实现 |
+| P6-002 | 新增多平台配置项 | 完成 | 更新 `backend/app/core/config.py` 和 `.env.example`，新增 `REPOLENS_CHANGE_REQUEST_*`、GitHub/Gitee/GitLab token 和 base URL 配置；新增 `test_phase6_config.py` |
+| P6-003 | 实现 PR/MR URL parser | 完成 | 新增 `backend/app/services/change_request` 模块和 `test_phase6_change_request_parser.py`，支持 GitHub PR、Gitee PR、GitLab.com MR 和 self-hosted GitLab MR URL 解析 |
+| P6-004 | 实现首个 Change Request client | 完成 | 实现 GitHub PR 只读 client、HTTP transport、错误映射和 fake transport 测试；Gitee/GitLab fetch 保持 not implemented |
+| P6-005 | 新增 change_requests 数据模型 | 完成 | 新增 `backend/app/models/change_request.py`，注册 `ChangeRequest`、`ChangeRequestPlatform`、`ChangeRequestType`，保存脱敏外部变更 metadata 并关联 repository/review task |
+| P6-006 | 新增 PR/MR Review API | 完成 | 新增 `backend/app/api/change_requests.py`、`backend/app/schemas/change_request.py`，支持 `POST /api/repositories/{repository_id}/change-requests/reviews`、GET by id 和 GET by task |
+| P6-007 | 接入现有 Review pipeline | 完成 | 新增 `ChangeRequestReviewService`，provider fetch 后保存 `change_requests` 并复用现有 `ReviewService` 创建/运行 review task |
+| P6-008 | 前端新增 PR/MR Review flow | 完成 | 更新 `frontend/types/workbench.ts`、`frontend/lib/api.ts` 和 `frontend/app/page.tsx`，新增 `Diff`/`PR/MR URL` 模式、平台无关 URL 输入、metadata 展示和报告复用 |
+| P6-009 | 错误处理与安全边界 | 完成 | 补齐 service 层 diff limit guard、API 错误 detail 脱敏、前端错误归一化，并覆盖 token 脱敏、auth、rate limit、diff too large、fetch failure |
+| P6-010 | 准备真实演示 PR/MR | 完成 | 新增 `evals/change_requests/phase6_demo_prs.json` 和 README，准备离线 synthetic GitHub PR fixture、unsupported provider URL 和 API smoke 测试 |
+| P6-011 | 测试与评测 | 完成 | 新增 P6-011 smoke 评测断言和 `docs/phase6-smoke-evaluation.md`；全量 ruff/pytest、前端 build/type check、Docker config 和 UI DOM smoke 通过，截图命令受当前 Browser CDP 超时阻断 |
+| P6-012 | 更新文档和演示材料 | 完成 | 更新 README、evals 文档、worklog、闭环记录和 `docs/phase6-final-closure-review.md`；截图 artifact 因 Browser CDP timeout 仍为环境阻断，已如实记录 |
+
+## 21. Phase 6 验证记录
+
+- P6-DESIGN：完成 `docs/phase6-detailed-design.md`，文档审查通过，范围限定为多代码平台 PR/MR 只读集成，不进入 Phase 7 MCP Server、Phase 8 真正多 Agent、Phase 9 benchmark 或 Phase 10 包装。
+- P6-CLOSED-LOOP：完成 `docs/phase6-closed-loop-log.md`，按 P6-DESIGN、P6-CLOSED-LOOP 和 P6-001 到 P6-012 建立开发、审核、测试和评测记录。
+- 自动化：更新 heartbeat 自动化 `repolens-phase-6`，每 10 分钟继续推进当前线程；prompt 已从 GitHub-only 调整为多平台 PR/MR Change Request Provider 方向。
+- P6-001：设计明确 Phase 6 初始要求用户选择已索引 repository，再输入 PR/MR URL；外部平台 diff 转换为现有 `ReviewCreateRequest`，复用 `ReviewService`。
+- P6-001：设计明确 GitHub PR 是首个落地适配器，Gitee Pull Request、GitLab Merge Request 和 self-hosted GitLab 必须有 parser/provider 契约或 unsupported/not implemented 错误。
+- P6-001：本轮仅新增文档和更新 worklog，未修改业务代码，未提前实现 P6-002 到 P6-012。
+- P6-002：扩展 `Settings`，新增 `change_request_timeout_seconds`、`change_request_max_diff_chars`、`github_token`、`github_base_url`、`gitee_token`、`gitee_base_url`、`gitlab_token` 和 `gitlab_base_url`。
+- P6-002：更新 `.env.example`，补充多平台 PR/MR 配置项；token 默认留空，base URL 使用公开平台默认值。
+- P6-002：新增 `backend/app/tests/test_phase6_config.py`，覆盖默认值和显式覆盖；未提前实现 URL parser、provider client、API 或数据模型。
+- P6-002：`.\\.venv\\Scripts\\python.exe -m ruff check app\\core\\config.py app\\tests\\test_phase6_config.py` 通过。
+- P6-002：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_config.py` 通过，2 个测试通过。
+- P6-003：新增 `backend/app/services/change_request/models.py`，定义平台、change type 和 `ChangeRequestRef`。
+- P6-003：新增 `backend/app/services/change_request/providers.py`，实现 `GitHubChangeRequestProvider`、`GiteeChangeRequestProvider`、`GitLabChangeRequestProvider`、`choose_change_request_provider` 和 `parse_change_request_url`。
+- P6-003：parser 支持 `https://github.com/{owner}/{repo}/pull/{number}`、`https://gitee.com/{owner}/{repo}/pulls/{number}`、`https://gitlab.com/{namespace}/{repo}/-/merge_requests/{number}` 和 self-hosted GitLab MR；query/fragment 会被 canonicalize 掉。
+- P6-003：新增 `backend/app/tests/test_phase6_change_request_parser.py`，覆盖成功解析、invalid URL、unsupported provider 和 provider 选择；未提前实现平台 API client、数据库模型、Review API 或前端。
+- P6-003：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\change_request app\\tests\\test_phase6_change_request_parser.py` 通过。
+- P6-003：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_change_request_parser.py` 通过，12 个测试通过。
+- P6-002/P6-003 合并专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\core\\config.py app\\services\\change_request app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py` 通过。
+- P6-002/P6-003 合并专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py` 通过，14 个测试通过。
+- P6-004：扩展 `backend/app/services/change_request/models.py`，新增 `ChangeRequest`、`ChangeRequestFile` 和 `ChangeRequestCommit`。
+- P6-004：扩展 `backend/app/services/change_request/providers.py`，新增可注入 `HTTPTransport`、`HTTPResponse`、GitHub `fetch`、JSON/text request helper 和 auth/not found/rate limit/diff too large 错误映射。
+- P6-004：GitHub client 读取 PR metadata、files、commits 和 diff，组装统一 `ChangeRequest`；`metadata` 只保存脱敏计数字段，不保存 token。
+- P6-004：Gitee/GitLab provider 保持 URL parser 可用，但 `fetch` 继承默认 not implemented，避免一次性扩成多平台 API client。
+- P6-004：新增 `backend/app/tests/test_phase6_github_provider.py`，使用 fake transport 覆盖成功拉取、无 token public request、404、auth、rate limit、diff too large 和非 GitHub provider not implemented。
+- P6-004：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\change_request app\\tests\\test_phase6_github_provider.py` 通过。
+- P6-004：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_github_provider.py` 通过，5 个测试通过。
+- P6-002/P6-004 合并专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\core\\config.py app\\services\\change_request app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py` 通过。
+- P6-002/P6-004 合并专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py` 通过，19 个测试通过。
+- P6-005：新增 `backend/app/models/change_request.py`，实现 `change_requests` 表、平台/type enum、repository/task 外键、统计字段、created/updated 时间和索引。
+- P6-005：更新 `Repository.change_requests` 与 `Task.change_requests` relationship；只新增新表，不修改既有表字段，降低无 Alembic 场景下的迁移风险。
+- P6-005：数据库列名保留 `metadata`，ORM 属性命名为 `metadata_payload`，避免踩 SQLAlchemy Declarative 的 `metadata` 保留属性。
+- P6-005：新增 `backend/app/tests/test_phase6_change_request_models.py`，覆盖表创建、索引、repository/task round-trip、metadata 脱敏 JSON 和 repository 删除级联。
+- P6-005：`.\\.venv\\Scripts\\python.exe -m ruff check app\\models\\change_request.py app\\models\\repository.py app\\models\\task.py app\\models\\__init__.py app\\tests\\test_phase6_change_request_models.py` 通过。
+- P6-005：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_change_request_models.py` 通过，3 个测试通过。
+- P6-006：新增 `backend/app/schemas/change_request.py`，定义 `ChangeRequestReviewCreateRequest`、`ChangeRequestMetadataResponse` 和 `ChangeRequestReviewResponse`；response 只返回脱敏展示字段，不返回 raw metadata。
+- P6-006：新增 `backend/app/api/change_requests.py` 并挂载到 `backend/app/main.py`，支持创建 PR/MR Review、按 change_request_id 查询、按 task_id 查询。
+- P6-006：API 错误映射覆盖 repository missing/not ready、invalid URL、unsupported provider、provider not implemented、auth、not found、rate limit、diff too large、fetch failure 和 Review validation。
+- P6-007：新增 `backend/app/services/change_request/service.py`，`ChangeRequestReviewService` 负责选择 provider、fetch 统一 ChangeRequest、写入 `change_requests`、构造 `ReviewCreateRequest`。
+- P6-007：`ChangeRequestReviewService` 调用现有 `ReviewService.create_review_task`、`ReviewService.run_review_task` 和 `ReviewService.build_task_response`；不复制 `analyze_diff`、`code_search`、`get_symbol_context`、risk/verifier/report writer 流水线。
+- P6-007：新增 `backend/app/tests/test_phase6_change_request_api.py`，使用 fake provider 覆盖成功 PR/MR URL review、repository not ready、unsupported provider、invalid URL、Gitee not implemented、GET missing 和 token/Authorization 脱敏。
+- P6-006/P6-007：`.\\.venv\\Scripts\\python.exe -m ruff check app\\api\\change_requests.py app\\schemas\\change_request.py app\\services\\change_request app\\models\\change_request.py app\\models\\repository.py app\\models\\task.py app\\models\\__init__.py app\\main.py app\\tests\\test_phase6_change_request_api.py app\\tests\\test_phase6_change_request_models.py` 通过。
+- P6-006/P6-007：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py` 通过，6 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-002/P6-007 合并专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\core\\config.py app\\api\\change_requests.py app\\schemas\\change_request.py app\\services\\change_request app\\models\\change_request.py app\\models\\repository.py app\\models\\task.py app\\models\\__init__.py app\\main.py app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py` 通过。
+- P6-002/P6-007 合并专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py` 通过，25 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-008：扩展 `frontend/types/workbench.ts`，新增 `ChangeRequestReviewCreateRequest`、`ChangeRequestMetadata` 和 `ChangeRequestReviewResponse`。
+- P6-008：扩展 `frontend/lib/api.ts`，新增 `createChangeRequestReview(repositoryId, payload)`，调用 `/api/repositories/{repository_id}/change-requests/reviews`。
+- P6-008：更新 Workbench Review 面板，保留 `Diff` 粘贴模式，新增 `PR/MR URL` 模式、`Run PR/MR Review` 操作、平台/source/target branch/changed files/additions/deletions/commits metadata 展示。
+- P6-008：Review 报告、risks、suggested tests、citations、tool_calls 和 traces 继续复用现有渲染；前端文案保持 PR/MR 和平台无关，不写成 GitHub-only。
+- P6-008：`npm run build` 通过。
+- P6-008：`npm exec tsc -- --noEmit` 第一次在 `.next/types` 尚未生成时失败；执行 build 后复跑通过。
+- P6-008：in-app Browser 冒烟未完成，原因是当前工具会话中 `next dev` 前台可 Ready，但后台 dev server 不能稳定保持监听 3000；P6-011 需补浏览器截图/视觉验证。
+- P6-009：更新 `backend/app/services/change_request/service.py`，在 provider fetch 后统一执行 `REPOLENS_CHANGE_REQUEST_MAX_DIFF_CHARS` guard，防止 provider 绕过 diff limit。
+- P6-009：更新 `backend/app/api/change_requests.py`，通过 Settings token 与 Bearer/Authorization 模式统一脱敏所有 PR/MR API 错误 detail；413 状态使用新 `HTTP_413_CONTENT_TOO_LARGE` 常量。
+- P6-009：更新 `frontend/lib/api.ts`，把 FastAPI validation error 数组归一化为可读错误文本，并对 Bearer/Authorization 文本做前端二次脱敏。
+- P6-009：扩展 `backend/app/tests/test_phase6_change_request_api.py`，覆盖 service diff limit、provider error token 脱敏、auth=400、rate limit=429、diff too large=413、fetch failure=502，并确认失败 fetch 不创建 `change_requests` 或 review task。
+- P6-009：`.\\.venv\\Scripts\\python.exe -m ruff check app\\api\\change_requests.py app\\services\\change_request\\service.py app\\tests\\test_phase6_change_request_api.py` 通过。
+- P6-009：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_change_request_api.py` 通过，6 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-009：`npm run build` 通过。
+- P6-009：`npm exec tsc -- --noEmit` 与 build 并行时曾因 `.next/types` 生成竞态失败；build 完成后顺序复跑通过。
+- P6-002/P6-009 合并专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\core\\config.py app\\api\\change_requests.py app\\schemas\\change_request.py app\\services\\change_request app\\models\\change_request.py app\\models\\repository.py app\\models\\task.py app\\models\\__init__.py app\\main.py app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py` 通过。
+- P6-002/P6-009 合并专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py` 通过，28 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-010：新增 `evals/change_requests/phase6_demo_prs.json`，准备 `phase6-cr-001` synthetic GitHub-style PR fixture，URL 为 `https://github.com/repolens-demo/ts_webapp/pull/42`，绑定 `evals/demo_repos/ts_webapp`。
+- P6-010：fixture diff 只修改 `src/components/review-panel.tsx` 的 empty diff guard，体积小、引用真实 demo 文件、无 token/Authorization，适合离线演示 metadata、review output、tool_calls 和 traces。
+- P6-010：fixture 同时提供 unsupported provider URL `https://bitbucket.org/repolens-demo/ts_webapp/pull-requests/42`，用于演示 unsupported provider 错误态。
+- P6-010：新增 `evals/change_requests/README.md`，说明 synthetic PR、仓库路径、失败演示和无外部写回边界；更新 `evals/README.md`。
+- P6-010：新增 `backend/app/tests/test_phase6_demo_change_requests.py`，覆盖 fixture 可解析、diff 文件存在、大小限制、无 token、安全失败 URL，以及 fixture provider 通过 PR/MR Review API 生成 completed Review task。
+- P6-010：`.\\.venv\\Scripts\\python.exe -m ruff check app\\tests\\test_phase6_demo_change_requests.py` 通过。
+- P6-010：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_demo_change_requests.py` 通过，5 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-002/P6-010 合并专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\core\\config.py app\\api\\change_requests.py app\\schemas\\change_request.py app\\services\\change_request app\\models\\change_request.py app\\models\\repository.py app\\models\\task.py app\\models\\__init__.py app\\main.py app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py app\\tests\\test_phase6_demo_change_requests.py` 通过。
+- P6-002/P6-010 合并专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_config.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_models.py app\\tests\\test_phase6_change_request_api.py app\\tests\\test_phase6_demo_change_requests.py` 通过，33 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-010：`npm run build` 通过。
+- P6-010：`npm exec tsc -- --noEmit` 与 build 并行时曾因 `.next/types` 生成竞态失败；build 完成后顺序复跑通过。
+- P6-011：扩展 `backend/app/tests/test_phase6_demo_change_requests.py`，新增 `test_phase6_demo_change_request_smoke_records_metrics_citations_and_safety`，在内存库中插入已索引 `ReviewPanel` chunk，走 PR/MR Review API 并覆盖 completed task、citations、tool_calls latency、traces 和 token/Authorization 脱敏。
+- P6-011：新增 `docs/phase6-smoke-evaluation.md`，记录 URL parse success、provider fetch success、review completion、citation coverage smoke、latency smoke、safety smoke、unsupported provider smoke、质量门禁和 UI smoke。
+- P6-011：更新 `docker-compose.yml`，backend service 显式传入 `REPOLENS_CHANGE_REQUEST_TIMEOUT_SECONDS`、`REPOLENS_CHANGE_REQUEST_MAX_DIFF_CHARS`、GitHub/Gitee/GitLab token 与 base URL，保证容器演示也有 Phase 6 配置入口。
+- P6-011：`.\\.venv\\Scripts\\python.exe -m ruff check app\\tests\\test_phase6_demo_change_requests.py` 通过。
+- P6-011：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_demo_change_requests.py` 通过，6 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-011：`.\\.venv\\Scripts\\python.exe -m ruff check app` 通过。
+- P6-011：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，227 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-011：`npm run build` 通过，Next.js production build 正常。
+- P6-011：`npm exec tsc -- --noEmit` 在 `npm run build` 之后顺序执行通过；生成的 `frontend/tsconfig.tsbuildinfo` 已清理。
+- P6-011：`docker compose config` 通过，输出确认 backend service 包含 Phase 6 Change Request 配置项。
+- P6-011：in-app Browser DOM smoke 通过：持久本地 `npm run start -- -p 3000` 返回 HTTP 200；点击 `PR/MR URL` 后 URL 输入框可见，`Run PR/MR Review` 按钮存在且在未选 ready repository 时保持 disabled。
+- P6-011：UI screenshot 未完成，原因是当前 in-app Browser 的 CDP `Page.captureScreenshot` 对 full-page、viewport 和 clipped screenshot 均超时；未生成截图文件，P6-012 已将其作为环境阻断收束记录。
+- P6-012：更新 README，补充 V1 Phase 6 当前范围、多平台 Change Request Provider、PR/MR Review Flow、Phase 6 环境变量、API、截图状态、安全边界、Demo Plan、Resume Bullets、Interview Talk Track 和文档索引。
+- P6-012：更新 `evals/README.md` 和 `evals/change_requests/README.md`，说明 Phase 6 synthetic PR/MR fixture、平台无关契约、离线 smoke、unsupported provider 演示和无外部写回边界。
+- P6-012：新增 `docs/phase6-final-closure-review.md`，记录交付能力、验收清单、验证结果、安全审查、已知限制和最终收束结论。
+- P6-012：更新 `docs/phase6-smoke-evaluation.md`，将下一步改为收束用途，明确该 smoke 记录已被 README 和 final closure 使用。
+- P6-012：更新 `docs/phase6-closed-loop-log.md`，将 P6-012 标记为完成，并补齐开发、审核、测试、评测和最终验收记录。
+- P6-012：截图仍未生成，原因沿用 P6-011 已确认的 in-app Browser CDP `Page.captureScreenshot` timeout；README 和最终验收均将其标记为 pending/blocker，没有伪造截图产物。
+- P6-012：`.\\.venv\\Scripts\\python.exe -m ruff check app` 通过。
+- P6-012：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，227 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-012：`npm run build` 通过。
+- P6-012：`npm exec tsc -- --noEmit` 在 `npm run build` 后顺序执行通过；生成的 `frontend/tsconfig.tsbuildinfo` 已清理。
+- P6-012：`docker compose config` 通过，backend service 保留 Phase 6 Change Request 多平台配置项。
+
+## 22. Phase 6 最终收束记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-14 | Phase 6 完成 | P6-001 到 P6-012 全部完成；GitHub 是首个只读 fetch 适配器，Gitee Pull Request、GitLab Merge Request 和 self-hosted GitLab 通过 parser/provider contract 预留；未实现写回 PR/MR、approve/request changes、push、自动修改代码或后续 Phase 7/8/9/10 范围 |
+
+## 23. Phase 6.5 / P6-EXT 任务记录
+
+| 编号 | 任务 | 状态 | 记录 |
+| --- | --- | --- | --- |
+| P6-EXT-001 | 现状审计 | 完成 | 确认 GitHub PR 已完成 fetch/API/UI/smoke 闭环；Gitee/GitLab/self-hosted GitLab 仅完成 parser/provider contract 和 not implemented 错误路径 |
+| P6-EXT-002 | 编写详细设计与闭环记录 | 完成 | 新增 `docs/phase6-ext-detailed-design.md` 和 `docs/phase6-ext-closed-loop-log.md`，明确只读 fetch client、API smoke、安全和验收标准 |
+| P6-EXT-003 | 实现 Gitee PR fetch client | 完成 | `GiteeChangeRequestProvider.fetch` 已实现 metadata/files/commits 只读拉取，使用 patch 重建 diff，token 通过 access_token query 传递且不写入 metadata |
+| P6-EXT-004 | 实现 GitLab.com MR fetch client | 完成 | `GitLabChangeRequestProvider.fetch` 已实现 API v4 metadata/diffs/commits 只读拉取，使用 patch 重建 diff，token 通过 `PRIVATE-TOKEN` header 传递且不写入 metadata |
+| P6-EXT-005 | 实现 self-hosted GitLab MR fetch client | 完成 | self-hosted GitLab 默认由 MR URL 派生 `{host}/api/v4`，也支持 `REPOLENS_GITLAB_BASE_URL` 覆盖 |
+| P6-EXT-006 | API 闭环 smoke | 完成 | `test_phase6_change_request_api.py` 新增 Gitee/GitLab/self-hosted GitLab fake provider 循环，均通过现有 PR/MR Review API 生成 completed Review task |
+| P6-EXT-007 | 安全与错误处理 | 完成 | `test_phase6_ext_providers.py` 覆盖 token safety、auth、not found、rate limit、diff too large、空 patch fetch failure |
+| P6-EXT-008 | 更新文档和演示材料 | 完成 | README、evals README、Phase 6 smoke、Phase 6 final closure、P6-EXT closed-loop 和 worklog 已更新为 Phase 6.5 后状态 |
+| P6-EXT-009 | 最终质量门禁 | 完成 | ruff、pytest、frontend build/type check、Docker config 全部通过 |
+
+## 24. Phase 6.5 / P6-EXT 验证记录
+
+- P6-EXT-003/P6-EXT-005：更新 `backend/app/services/change_request/providers.py`，Gitee/GitLab provider 不再继承默认 not implemented；均实现只读 fetch、payload 解析、diff 重建、diff limit 和统一 `FetchedChangeRequest` 输出。
+- P6-EXT-003：新增 Gitee provider test，覆盖 metadata/files/commits 拉取、access_token query、patch diff 重建、统计字段和 token 不进入 metadata。
+- P6-EXT-004：新增 GitLab.com provider test，覆盖 metadata/diffs/commits 拉取、`PRIVATE-TOKEN` header、patch diff 重建、统计字段和 token 不进入 metadata。
+- P6-EXT-005：新增 self-hosted GitLab provider test，覆盖 URL 派生 `/api/v4` 和 configured base URL override。
+- P6-EXT-006：扩展 `backend/app/tests/test_phase6_change_request_api.py`，验证 Gitee/GitLab/self-hosted GitLab fake provider 均可通过现有 PR/MR Review API 生成 completed Review task，并持久化 `change_requests` metadata。
+- P6-EXT-007：扩展错误和安全测试，覆盖 auth、not found、rate limit、diff too large、空 patch fetch failure 和 token 不进入 metadata。
+- P6-EXT：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\change_request app\\tests\\test_phase6_ext_providers.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_api.py` 通过。
+- P6-EXT：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_ext_providers.py app\\tests\\test_phase6_github_provider.py app\\tests\\test_phase6_change_request_parser.py app\\tests\\test_phase6_change_request_api.py` 通过，27 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-EXT：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase6_change_request_api.py app\\tests\\test_phase6_ext_providers.py` 通过，12 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-EXT-008：更新 README、evals README、Phase 6 smoke evaluation、Phase 6 final closure review、P6-EXT closed-loop log 和 worklog；当前文档明确 Gitee/GitLab/self-hosted GitLab 已 fetch-capable，Phase 6 历史记录保留当时的 reserved/not implemented 事实。
+- P6-EXT-009：`.\\.venv\\Scripts\\python.exe -m ruff check app` 通过。
+- P6-EXT-009：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，232 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P6-EXT-009：`npm run build` 通过。
+- P6-EXT-009：`npm exec tsc -- --noEmit` 在 `npm run build` 后顺序执行通过；生成的 `frontend/tsconfig.tsbuildinfo` 已清理。
+- P6-EXT-009：`docker compose config` 通过，backend service 包含 GitHub/Gitee/GitLab Change Request env vars。
+
+## 25. Phase 6.5 / P6-EXT 最终收束记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-14 | P6-EXT 完成 | Gitee Pull Request、GitLab.com Merge Request 和 self-hosted GitLab Merge Request 均已具备只读 fetch client，并通过 provider tests 与 PR/MR Review API smoke；仍不写回 PR/MR、不 approve/request changes、不 push、不自动修改代码、不进入 Phase 7 |
+
+## 26. Phase 7 任务记录
+
+| 编号 | 任务 | 状态 | 记录 |
+| --- | --- | --- | --- |
+| P7-001 | 编写 Phase 7 详细设计 | 完成 | 新增 `docs/phase7-detailed-design.md`，明确 FastAPI HTTP JSON-RPC MCP endpoint、tool registry、权限模型、审计字段、前端面板、测试和验收标准 |
+| P7-002 | 设计 Tool Registry | 完成 | 新增 `backend/app/services/mcp/registry.py`，统一工具名、description、input schema、permission_policy、enabled 和 handler |
+| P7-003 | 设计权限模型 | 完成 | 实现 read_only 默认 allow、safe_check 默认 disabled，并保留 deny/confirm_required 策略值 |
+| P7-004 | 实现 MCP Server 启动入口 | 完成 | 新增 `backend/app/api/mcp.py` 和 `MCPService`，`POST /api/mcp` 支持 JSON-RPC `initialize`、`tools/list`、`tools/call` |
+| P7-005 | 导出只读工具 | 完成 | 导出 repository.list/status、code.search、file.read_slice、symbol.context、diff.analyze，复用既有只读 service/tool |
+| P7-006 | 导出高阶工具 | 完成 | 导出 repository.ask 和 review.diff，复用 QAService 与 ReviewService |
+| P7-007 | 增强 tool_calls 审计字段 | 完成 | `ToolCall` 新增 client/session/permission_policy/input_hash/output_hash；MCP 调用创建轻量 `mcp_tool` task 并写审计 |
+| P7-008 | 前端 Tool Permissions Panel | 完成 | Workbench 新增 MCP Tool Permissions 面板，展示 registry、permission policy、enabled/disabled、最近 MCP 调用、client/session/hash 和失败原因 |
+| P7-009 | MCP client smoke test | 完成 | TestClient 覆盖 initialize、tools/list、code.search、file.read_slice、repository.status、symbol.context、diff.analyze、repository.ask、review.diff |
+| P7-010 | 安全测试 | 完成 | 覆盖路径穿越、敏感文件、超大 diff、禁用工具和审计记录 |
+| P7-011 | 文档与演示 | 完成 | README、worklog、闭环记录、final closure review 和质量门禁已更新 |
+
+## 27. Phase 7 验证记录
+
+- P7-001：完成 `docs/phase7-detailed-design.md` 和 `docs/phase7-closed-loop-log.md`，明确 Phase 7 只做 MCP Server、工具权限和审计，不进入 Phase 8/9/10。
+- P7-002/P7-003：新增 `backend/app/services/mcp/registry.py`，Tool Registry 暴露工具 schema、permission policy、enabled 状态和 handler；safe_check 工具默认 disabled。
+- P7-004：新增 `backend/app/services/mcp/service.py`、`backend/app/api/mcp.py`、`backend/app/schemas/mcp.py`，实现 HTTP JSON-RPC endpoint。
+- P7-005：导出 `repository.list`、`repository.status`、`code.search`、`file.read_slice`、`symbol.context`、`diff.analyze`。
+- P7-006：导出 `repository.ask` 和 `review.diff`，复用现有同步 QA/Review pipeline。
+- P7-007：扩展 `ToolCall` 模型，新增 `client_name`、`client_session_id`、`permission_policy`、`input_hash`、`output_hash`；新增 `TaskType.MCP_TOOL` 用于 MCP tool call 审计归属。
+- P7-008：扩展 `frontend/types/workbench.ts`、`frontend/lib/api.ts` 和 `frontend/app/page.tsx`，接入 `/api/mcp/tools` 与 `/api/mcp/tool-calls`，新增 Tool Permissions Panel。
+- P7-009：`test_phase7_mcp_api.py` 覆盖 `initialize`、`tools/list`、`tools/call`，并 smoke `code.search`、`file.read_slice`、`repository.status`、`symbol.context`、`diff.analyze`、`repository.ask`、`review.diff`。
+- P7-010：MCP 安全测试覆盖禁用 `run_safe_static_check`、敏感文件 `.env`、路径穿越 `../outside.py` 和超大 diff。
+- P7-011：更新 README、`docs/phase7-closed-loop-log.md` 和 `docs/phase7-final-closure-review.md`，明确 Phase 7 完成边界和非目标。
+- P7 SQLite 兼容：更新 `backend/app/db/init_db.py`，对已有 SQLite `tool_calls` 表幂等补齐 Phase 7 新增审计列和索引。
+- P7 后端专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\mcp app\\api\\mcp.py app\\schemas\\mcp.py app\\models\\tool_call.py app\\models\\task.py app\\db\\init_db.py app\\tests\\test_phase7_mcp_api.py app\\tests\\test_phase7_mcp_registry.py` 通过。
+- P7 后端专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase7_mcp_api.py app\\tests\\test_phase7_mcp_registry.py` 通过，7 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P7 前端：`npm run build` 通过。
+- P7 前端：`npm exec tsc -- --noEmit` 通过；生成的 `frontend/tsconfig.tsbuildinfo` 已清理。
+- P7 全量：`.\\.venv\\Scripts\\python.exe -m ruff check app` 通过。
+- P7 全量：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，239 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P7 Docker：`docker compose config` 通过。
+
+## 28. Phase 7 最终收束记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-14 | Phase 7 完成 | P7-001 到 P7-011 全部完成；RepoLens 已将 MCP-style Tool Layer 升级为 FastAPI HTTP JSON-RPC MCP endpoint，具备 Tool Registry、权限策略、MCP tool call 审计字段、前端 Tool Permissions Panel 和 TestClient smoke/security 闭环；未实现公网 MCP、stdio transport、任意 shell、写操作、PR/MR 写回、自动改代码或 Phase 8/9/10 范围 |
+
+## 29. Phase 8 任务记录
+
+| 编号 | 任务 | 状态 | 记录 |
+| --- | --- | --- | --- |
+| P8-001 | 编写 Phase 8 详细设计 | 完成 | 新增 `docs/phase8-detailed-design.md` 和 `docs/phase8-closed-loop-log.md`，明确真正多 Agent 协作只做受控 session/message/assignment/arbiter，不进入 Phase 9/10 |
+| P8-002 | 新增 `agent_sessions` 表 | 完成 | 新增 `AgentSession`，保存 task/repository、status、mode、round limit、assignment limit、token budget、summary、final report |
+| P8-003 | 新增 `agent_messages` 表 | 完成 | 新增 `AgentMessage`，保存 sender/recipient/type/content/evidence/claims/confidence/requires_arbitration |
+| P8-004 | 新增 `agent_assignments` 表 | 完成 | 新增 `AgentAssignment`，保存 agent_name、role、status、round、input/output、evidence、dissent、confidence、token_estimate、latency |
+| P8-005 | 实现 Coordinator Agent | 完成 | Multi-Agent service 创建 Coordinator assignment/message，生成 changed files、query、reviewer plan 和 limits |
+| P8-006 | 实现并行 Review 子任务 | 完成 | Risk Reviewer、Security Reviewer、Test Strategist 形成独立 assignment/message；实现上保持同步顺序执行、语义上独立分析 |
+| P8-007 | 实现 Arbiter Agent | 完成 | Arbiter 合并 accepted/rejected/downgraded/dissent，保留处理理由并写入 final report |
+| P8-008 | 实现轮次限制 | 完成 | session 记录并 guard `round_limit`、`assignment_limit`、`token_budget`，API smoke 校验 token 估算未越界 |
+| P8-009 | 实现 evidence-grounded message policy | 完成 | 安全敏感风险缺 evidence 时进入 `security_evidence_gap` dissent，并标记 requires_arbitration |
+| P8-010 | 前端 Multi-Agent Trace Panel | 完成 | Workbench Review 新增 `Multi-Agent` 模式，展示 session、assignments、messages、dissent、Arbiter、comparison、risks、tests、citations 和 markdown |
+| P8-011 | 多 Agent 评测 | 完成 | 新增 single-main `/reviews` vs `/multi-agent-reviews` smoke comparison，并验证 dissent/arbitration |
+| P8-012 | 文档与演示 | 完成 | 更新 README、closed-loop log、development worklog，新增 `docs/phase8-smoke-evaluation.md` 和 `docs/phase8-final-closure-review.md` |
+
+## 30. Phase 8 验证记录
+
+- P8 模型专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\models\\agent_session.py app\\models\\task.py app\\models\\repository.py app\\models\\__init__.py app\\tests\\test_phase8_multi_agent_models.py` 通过。
+- P8 模型专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase8_multi_agent_models.py` 通过，3 个测试通过。
+- P8 后端专项：`.\\.venv\\Scripts\\python.exe -m ruff check app\\schemas\\multi_agent.py app\\services\\multi_agent app\\api\\multi_agent.py app\\main.py app\\tests\\test_phase8_multi_agent_api.py app\\tests\\test_phase8_multi_agent_models.py` 通过。
+- P8 后端专项：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase8_multi_agent_models.py app\\tests\\test_phase8_multi_agent_api.py` 通过，7 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P8 API smoke 覆盖 1 个 completed multi-agent task、1 个 session、6 个 assignments、6 条 messages、Arbiter decision、GET task/session 查询和 comparison payload。
+- P8 dissent smoke 覆盖未索引安全 diff，确认 `security_evidence_gap` dissent、`dissent_count` 和 `requires_arbitration` 不丢失。
+- P8 comparison smoke 覆盖同一 diff 的旧单主 Review 和 Multi-Agent Review，确认 multi-agent response 记录 `baseline=single_main_review` 与 `variant=multi_agent_review`。
+- P8 前端：`npm run build` 通过。
+- P8 前端：`npm exec tsc -- --noEmit` 通过；第一次与 build 并行时因 `.next/types` 尚未生成失败，build 后顺序复跑通过，生成的 `frontend/tsconfig.tsbuildinfo` 已清理。
+
+## 31. Phase 8 最终收束记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-14 | Phase 8 完成 | P8-001 到 P8-012 全部完成；RepoLens 已具备受控真正多 Agent 协作流、持久化 session/assignment/message、独立 reviewer 输出、Arbiter dissent 处理、轮次/token guard、Multi-Agent Trace Panel 和 single-main comparison smoke；未实现跨进程 Agent 网络、无限自治 Agent、长期记忆、PR/MR 写回、自动改代码、Phase 9 benchmark 或 Phase 10 展示包装 |
+
+## 32. Phase 9 任务记录
+
+| 编号 | 任务 | 状态 | 记录 |
+| --- | --- | --- | --- |
+| P9-001 | 编写 Phase 9 详细设计 | 完成 | 新增 `docs/phase9-detailed-design.md` 和 `docs/phase9-closed-loop-log.md`，明确 Phase 9 只做 benchmark/metrics，不进入 Phase 10 包装 |
+| P9-002 | 设计 PR/MR benchmark schema | 完成 | 新增 `backend/app/services/v1_benchmark/dataset.py`，覆盖 platform/change_type/expected_risks/expected_files/mcp_tool_calls |
+| P9-003 | 准备 20-30 条 PR/MR 样例 | 完成 | 新增 `evals/datasets/v1_pr_mr_benchmark.jsonl`，22 条 synthetic PR/MR 样例，覆盖 GitHub/Gitee/GitLab/self-hosted GitLab/synthetic |
+| P9-004 | 设计 Review quality metrics | 完成 | 实现 risk hit、citation coverage、unsupported claim rate、latency、token estimate |
+| P9-005 | 设计 Multi-Agent metrics | 完成 | 实现 dissent usefulness、arbiter resolution rate、token overhead、latency |
+| P9-006 | 设计 MCP metrics | 完成 | 实现 tool success rate、permission denial correctness、latency、error count |
+| P9-007 | 实现 V1 Evaluation Runner | 完成 | 新增 `POST /api/v1-benchmarks`，复用 ReviewService、MultiAgentReviewService、MCPService |
+| P9-008 | 前端 Evaluation Panel 扩展 | 完成 | Workbench Evaluation section 新增 V1 Benchmark 子面板、三组指标、样例表和 markdown report |
+| P9-009 | 生成 V1 benchmark report | 完成 | 新增 `docs/phase9-v1-benchmark-report.md`、`docs/phase9-final-closure-review.md`，更新 README、evals README、worklog |
+
+## 33. Phase 9 验证记录
+
+- P9-002/P9-003：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\v1_benchmark app\\tests\\test_phase9_v1_benchmark_dataset.py` 通过。
+- P9-002/P9-003：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase9_v1_benchmark_dataset.py` 通过，8 个测试通过。
+- P9-004/P9-006：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\v1_benchmark app\\tests\\test_phase9_v1_benchmark_dataset.py app\\tests\\test_phase9_v1_benchmark_metrics.py` 通过。
+- P9-004/P9-006：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase9_v1_benchmark_dataset.py app\\tests\\test_phase9_v1_benchmark_metrics.py` 通过，12 个测试通过。
+- P9-007：`.\\.venv\\Scripts\\python.exe -m ruff check app\\services\\v1_benchmark app\\schemas\\v1_benchmark.py app\\api\\v1_benchmarks.py app\\main.py app\\schemas\\__init__.py app\\tests\\test_phase9_v1_benchmark_dataset.py app\\tests\\test_phase9_v1_benchmark_metrics.py app\\tests\\test_phase9_v1_benchmark_api.py` 通过。
+- P9-007：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase9_v1_benchmark_dataset.py app\\tests\\test_phase9_v1_benchmark_metrics.py app\\tests\\test_phase9_v1_benchmark_api.py` 通过，15 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P9-008：`npm run build` 通过。
+- P9-008：`npm exec tsc -- --noEmit` 通过。
+- P9-final：`.\\.venv\\Scripts\\python.exe -m ruff check app` 通过，All checks passed。
+- P9-final：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，261 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P9-final：`npm run build` 通过；`npm exec tsc -- --noEmit` 顺序复跑通过；并行 build 时曾因 `.next/types` 重建出现瞬时缺文件。
+- P9-final：`docker compose config` 通过，Compose 配置可展开。
+
+## 34. Phase 9 最终收束记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-14 | Phase 9 完成并闭环 | P9-001 到 P9-009 全部完成；RepoLens 已具备 V1 PR/MR benchmark dataset、Review/Multi-Agent/MCP 三组指标、V1 Benchmark API、Workbench V1 Benchmark panel 和 benchmark report；最终 Ruff、backend tests、frontend build/typecheck、docker compose config 均通过；未进入 live PR/MR benchmark farm、平台写回、自动改代码或 Phase 10 截图/发布包装 |
+
+## 35. Phase 10 任务记录
+
+| 编号 | 任务 | 状态 | 记录 |
+| --- | --- | --- | --- |
+| P10-001 | 编写 Phase 10 详细设计 | 完成 | 新增 `docs/phase10-detailed-design.md` 和 `docs/phase10-closed-loop-log.md`，明确 Phase 10 只做演示、文档与发布包装 |
+| P10-002 | README V1 更新 | 完成 | README 当前范围切换为 V1 complete path，补充 Phase 10、V1 Demo Runbook、release package、截图和发布说明 |
+| P10-003 | V1 架构图更新 | 完成 | README 架构图已包含 Change Request Provider、MCP endpoint、Multi-Agent 和 V1 Benchmark Runner |
+| P10-004 | 准备演示脚本 | 完成 | 新增 `docs/phase10-demo-runbook.md`，覆盖 PR/MR Review、MCP Client、Multi-Agent Trace、V1 Benchmark 四条演示路径 |
+| P10-005 | 录制或整理截图 | 完成 | 新增 `change-request-review-panel.png`、`mcp-tool-permissions-panel.png`、`multi-agent-trace-panel.png`、`v1-benchmark-panel.png`，并统一 10 张 README 截图为 PNG |
+| P10-006 | 更新简历 bullet | 完成 | README 和 `docs/phase10-v1-release-package.md` 已新增 V1 release packaging bullet |
+| P10-007 | 更新面试讲法 | 完成 | README 和 `docs/phase10-v1-release-package.md` 已新增 Phase 10 release decision/talk track |
+| P10-008 | 最终测试与发布检查 | 完成 | 新增 `backend/app/tests/test_phase10_release_package.py` 并完成最终质量门禁、compose、敏感信息扫描 |
+
+## 36. Phase 10 验证记录
+
+- P10-001：文档审查通过，详细设计和闭环日志已创建。
+- P10 release package：新增测试 `backend/app/tests/test_phase10_release_package.py`，用于校验 README、runbook、release package 和截图资产。
+- P10 release package Ruff：`.\\.venv\\Scripts\\python.exe -m ruff check app\\tests\\test_phase10_release_package.py` 通过。
+- P10 release package 测试：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests\\test_phase10_release_package.py` 通过，5 个测试通过。
+- P10 final：`.\\.venv\\Scripts\\python.exe -m ruff check app` 通过，All checks passed。
+- P10 final：`.\\.venv\\Scripts\\python.exe -m pytest app\\tests` 通过，266 个测试通过，1 个 Starlette/httpx deprecation warning。
+- P10 final：`npm run build` 通过。
+- P10 final：`npm exec tsc -- --noEmit` 通过，生成的 `frontend/tsconfig.tsbuildinfo` 已清理。
+- P10 final：`docker compose config` 通过。
+- P10 final：敏感信息扫描通过；仅命中 redaction 测试/文档样例，无实值密钥。
+
+## 37. Phase 10 最终收束记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-15 | Phase 10 完成并闭环 | P10-001 到 P10-008 全部完成；RepoLens V1 已具备 README、V1 架构叙事、demo runbook、release package、PR/MR/MCP/Multi-Agent/V1 Benchmark 截图、简历 bullet、面试讲法、release package 测试和最终质量门禁；未新增平台写回、自动改代码、公网 MCP、跨进程 Agent 网络或生产化范围 |

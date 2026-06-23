@@ -12,6 +12,8 @@ class TaskType(StrEnum):
     QA = "qa"
     REVIEW = "review"
     EVALUATION = "evaluation"
+    MCP_TOOL = "mcp_tool"
+    MULTI_AGENT_REVIEW = "multi_agent_review"
 
 
 class TaskStatus(StrEnum):
@@ -68,8 +70,15 @@ class Task(Base):
         back_populates="task",
         cascade="all, delete-orphan",
     )
+    change_requests: Mapped[list["ChangeRequest"]] = relationship(back_populates="task")
+    agent_sessions: Mapped[list["AgentSession"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+    )
 
 
 from app.models.agent_trace import AgentTrace  # noqa: E402
+from app.models.agent_session import AgentSession  # noqa: E402
+from app.models.change_request import ChangeRequest  # noqa: E402
 from app.models.repository import Repository  # noqa: E402
 from app.models.tool_call import ToolCall  # noqa: E402

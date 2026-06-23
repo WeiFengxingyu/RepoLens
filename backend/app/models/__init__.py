@@ -1,4 +1,13 @@
 from app.models.agent_trace import AgentTrace, AgentTraceStatus
+from app.models.agent_session import (
+    AgentAssignment,
+    AgentAssignmentStatus,
+    AgentMessage,
+    AgentMessageType,
+    AgentSession,
+    AgentSessionStatus,
+)
+from app.models.change_request import ChangeRequest, ChangeRequestPlatform, ChangeRequestType
 from app.models.code_chunk import CodeChunk, CodeLanguage, SymbolType
 from app.models.code_relation import CodeRelation, RelationType
 from app.models.evaluation import EvaluationResult, EvaluationRun, EvaluationStatus
@@ -9,6 +18,15 @@ from app.models.tool_call import ToolCall, ToolCallStatus, ToolPermissionDecisio
 __all__ = [
     "AgentTrace",
     "AgentTraceStatus",
+    "AgentAssignment",
+    "AgentAssignmentStatus",
+    "AgentMessage",
+    "AgentMessageType",
+    "AgentSession",
+    "AgentSessionStatus",
+    "ChangeRequest",
+    "ChangeRequestPlatform",
+    "ChangeRequestType",
     "CodeChunk",
     "CodeLanguage",
     "CodeRelation",

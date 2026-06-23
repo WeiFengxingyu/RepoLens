@@ -1,0 +1,42 @@
+[
+  {
+    "id": "phase6-cr-001",
+    "platform": "github",
+    "change_type": "pull_request",
+    "url": "https://github.com/repolens-demo/ts_webapp/pull/42",
+    "repository_key": "ts_demo",
+    "repository_path": "evals/demo_repos/ts_webapp",
+    "owner": "repolens-demo",
+    "repo": "ts_webapp",
+    "number": "42",
+    "title": "Loosen empty diff guard in review panel",
+    "author": "demo-reviewer",
+    "source_branch": "demo/loosen-review-empty-guard",
+    "target_branch": "main",
+    "state": "open",
+    "changed_files": [
+      "src/components/review-panel.tsx"
+    ],
+    "commit_titles": [
+      "Allow whitespace diff submission in review panel"
+    ],
+    "diff_text": "diff --git a/src/components/review-panel.tsx b/src/components/review-panel.tsx\n--- a/src/components/review-panel.tsx\n+++ b/src/components/review-panel.tsx\n@@ -9,7 +9,7 @@ export function ReviewPanel() {\n   const [status, setStatus] = useState(\"idle\");\n \n   async function submitReview() {\n-    if (!diff.trim()) return;\n+    if (!diff) return;\n     setStatus(\"loading\");\n     await createReview({ diff });\n     setStatus(\"submitted\");\n",
+    "expected_review_focus": [
+      "Whitespace-only diff can now be submitted",
+      "Button disabled condition and submit guard diverge",
+      "Add a UI test for whitespace-only diff input"
+    ],
+    "expected_tool_calls": [
+      "analyze_diff",
+      "code_search"
+    ],
+    "expected_metadata": {
+      "changed_file_count": 1,
+      "addition_count": 1,
+      "deletion_count": 1,
+      "commit_count": 1
+    },
+    "unsupported_provider_url": "https://bitbucket.org/repolens-demo/ts_webapp/pull-requests/42",
+    "notes": "Synthetic GitHub-style PR fixture for offline Phase 6 demos; do not write back to any platform."
+  }
+]

@@ -59,6 +59,11 @@ class ToolCall(Base):
         default=ToolPermissionDecision.ALLOW.value,
         index=True,
     )
+    client_name: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    client_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    permission_policy: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    input_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    output_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     input_summary: Mapped[str] = mapped_column(Text, nullable=False)
     output_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     input_payload: Mapped[str | None] = mapped_column(Text, nullable=True)

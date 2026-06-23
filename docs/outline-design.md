@@ -5,9 +5,9 @@
 - 项目名称：RepoLens
 - 推荐简历名称：RepoLens：基于代码图谱 GraphRAG 的仓库级代码智能体平台
 - 文档类型：概要设计文档
-- 当前版本：v0.3
+- 当前版本：v0.4
 - 创建日期：2026-06-05
-- 最近更新：2026-06-05
+- 最近更新：2026-06-13
 - 依据文档：`docs/requirements-analysis.md`
 - 目标读者：项目实现者、面试官、代码评审者
 
@@ -94,7 +94,7 @@ flowchart LR
 
 | 功能 | 范围 |
 | --- | --- |
-| 仓库导入 | 本地路径导入、GitHub URL 导入 |
+| 仓库导入 | 本地路径导入、Git URL 导入，识别 GitHub、Gitee、GitLab 和 generic Git URL |
 | 仓库扫描 | 文件树、语言统计、过滤规则、敏感文件跳过 |
 | 代码解析 | Python、TypeScript、JavaScript |
 | 代码 chunk | 函数级、类级、文件级 chunk，带行号和 symbol |
@@ -115,7 +115,7 @@ flowchart LR
 ### 4.2 暂不实现
 
 - 多用户登录。
-- GitHub PR 评论自动写回。
+- 代码平台 PR/MR 评论自动写回。
 - Kubernetes。
 - 分布式索引。
 - Neo4j。
@@ -128,8 +128,8 @@ flowchart LR
 
 ### 4.3 后续增强
 
-- GitHub Issues、PR、commit history 纳入上下文。
-- Repository Provider 抽象，支持 GitHub、Gitee、GitLab、generic Git URL 和本地 Git。
+- GitHub/Gitee/GitLab 等代码平台的 Issue、PR/MR、commit history 纳入上下文。
+- Repository Provider 与 Change Request Provider 抽象，支持 GitHub、Gitee、GitLab、self-hosted GitLab、generic Git URL 和本地 Git。
 - RepoLens MCP Server，对外暴露代码检索、符号上下文、仓库问答和 PR Review 能力。
 - 架构图可视化。
 - 静态检查工具完整接入。
@@ -145,6 +145,7 @@ flowchart LR
 - 创建仓库导入任务。
 - 管理仓库元数据。
 - 通过 Repository Provider 适配本地仓库、GitHub、Gitee、GitLab 和 generic Git URL。
+- V1 通过 Change Request Provider 适配 GitHub PR、Gitee Pull Request、GitLab Merge Request 和自建 GitLab Merge Request。
 - 调用 Scanner、Parser、Indexer、Graph Service。
 - 查询索引状态。
 - 删除仓库记录和索引。
@@ -438,6 +439,26 @@ stateDiagram-v2
 - 调用 Agent Orchestrator。
 - 输出结构化 Review 报告。
 
+V1 中 PR Review Service 需要支持平台无关的 Change Request 输入。平台适配器负责把 GitHub PR、Gitee Pull Request、GitLab Merge Request 或 self-hosted GitLab Merge Request 转换为统一的 diff、metadata、changed files 和 commits，再复用同一条 Review pipeline。
+
+#### Change Request Provider 职责
+
+- 解析不同平台的 PR/MR URL。
+- 读取平台 API token、base URL 和 timeout 配置。
+- 拉取变更 metadata、diff、changed files 和 commits。
+- 输出统一 ChangeRequest 对象。
+- 标记 unsupported provider、权限不足、rate limit、diff 过大等错误。
+
+#### 首批平台范围
+
+| 平台 | 变更类型 | V1 策略 |
+| --- | --- | --- |
+| GitHub | Pull Request | Phase 6 首个落地适配器 |
+| Gitee | Pull Request | Phase 6 预留 URL parser 和 provider 契约，可后续补 client |
+| GitLab.com | Merge Request | Phase 6 预留 URL parser 和 provider 契约，可后续补 client |
+| self-hosted GitLab | Merge Request | 通过 configurable base URL 预留 |
+| generic Git URL | 无平台 API | 继续支持 clone/import；不承诺 PR/MR metadata |
+
 #### Review 报告 schema
 
 ```text
@@ -650,8 +671,8 @@ flowchart TD
 | --- | --- | --- |
 | id | text | 仓库 ID |
 | name | text | 仓库名称 |
-| source_type | text | local 或 github |
-| source_url | text | GitHub URL |
+| source_type | text | local、github、gitee、gitlab 或 generic_git |
+| source_url | text | Git URL 或平台仓库 URL |
 | local_path | text | 本地路径 |
 | branch | text | 分支 |
 | language_summary | text | JSON |
@@ -750,6 +771,28 @@ flowchart TD
 | latency_ms | integer | 耗时 |
 | success | boolean | 是否成功 |
 | error | text | 错误 |
+
+#### change_requests
+
+V1 新增，用于保存外部平台 PR/MR metadata 与 Review task 的关联。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | text | 外部变更记录 ID |
+| repository_id | text | 关联 RepoLens repository，可为空或后续补全 |
+| task_id | text | 关联 review task |
+| platform | text | github、gitee、gitlab、self_hosted_gitlab |
+| change_type | text | pull_request 或 merge_request |
+| owner | text | 命名空间或组织 |
+| repo | text | 仓库名 |
+| number | text | PR/MR 编号 |
+| url | text | 原始 PR/MR URL |
+| title | text | 标题 |
+| author | text | 作者 |
+| source_branch | text | 源分支 |
+| target_branch | text | 目标分支 |
+| metadata | text | 脱敏后的 JSON metadata |
+| created_at | datetime | 创建时间 |
 
 ### 8.2 Qdrant Collection
 
@@ -923,7 +966,10 @@ repolens/
 | 场景 | 处理方式 |
 | --- | --- |
 | 仓库路径不存在 | 返回明确错误和修复建议 |
-| GitHub clone 失败 | 返回网络、权限或仓库不存在原因 |
+| Git clone 失败 | 返回网络、权限或仓库不存在原因 |
+| PR/MR URL 平台不支持 | 返回 unsupported provider 和当前支持平台 |
+| 平台 API 失败 | 返回认证、权限、rate limit 或资源不存在原因 |
+| PR/MR diff 过大 | 拒绝或截断，并返回明确原因 |
 | 文件解析失败 | 记录失败文件，继续处理其他文件 |
 | embedding 失败 | 重试，失败后标记索引失败 |
 | Qdrant 不可用 | 返回服务异常，提示检查 Docker |
@@ -1014,5 +1060,5 @@ P0+ 完成后必须满足：
 - 前端使用 Next.js + TypeScript + Tailwind CSS + shadcn/ui。
 - 元数据使用 SQLite，向量库使用 Qdrant，代码图使用 NetworkX，关键词检索使用 BM25。
 - P0+ 优先支持 Python、TypeScript 和 JavaScript。
-- P0+ 不做多用户、GitHub PR 写回、Kubernetes、大规模分布式索引、Neo4j、PostgreSQL、Redis/Celery 和完整 MCP Server。
-- 后续 P1/P2 可以通过 Repository Provider 和 RepoLens MCP Server 扩展为本地代码分析能力服务，支持 GitHub、Gitee、GitLab、generic Git URL 和本地 Git。
+- P0+ 不做多用户、代码平台 PR/MR 写回、Kubernetes、大规模分布式索引、Neo4j、PostgreSQL、Redis/Celery 和完整 MCP Server。
+- 后续 V1/P1/P2 可以通过 Repository Provider、Change Request Provider 和 RepoLens MCP Server 扩展为本地代码分析能力服务，支持 GitHub、Gitee、GitLab、self-hosted GitLab、generic Git URL 和本地 Git。
