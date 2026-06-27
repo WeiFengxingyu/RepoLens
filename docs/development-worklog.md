@@ -802,3 +802,9 @@
 | 日期 | 结论 | 记录 |
 | --- | --- | --- |
 | 2026-06-15 | Phase 10 完成并闭环 | P10-001 到 P10-008 全部完成；RepoLens V1 已具备 README、V1 架构叙事、demo runbook、release package、PR/MR/MCP/Multi-Agent/V1 Benchmark 截图、简历 bullet、面试讲法、release package 测试和最终质量门禁；未新增平台写回、自动改代码、公网 MCP、跨进程 Agent 网络或生产化范围 |
+
+## 38. V1 面试材料归档记录
+
+| 日期 | 结论 | 记录 |
+| --- | --- | --- |
+| 2026-06-27 | V1 产品收口后进入面试文档整理 | 新增 `docs/README.md` 文档总索引和 `docs/interview/README.md` 面试材料包索引；将面试专用材料集中到 `docs/interview/`，包括 `competitive-positioning.md`、`resume-project-audit.md`、`v1-interview-deep-dive-guide.md`、`v1-evaluation-scorecard.md`、`v1-real-pr-mr-case-studies.md`；保留 Phase 1-10 设计、闭环、评测和 release 文档在 `docs/` 根目录，保持实现审计链路清晰；本轮只做归档、路径修正、测试和发布整理，不新增 V1 产品功能范围 |

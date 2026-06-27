@@ -36,7 +36,12 @@ RepoLens keeps one predictable API surface while layering capability behind it:
 | `evals/demo_repos/python_service` | Python demo repository |
 | `evals/demo_repos/ts_webapp` | TypeScript demo repository |
 | `evals/change_requests/phase6_demo_prs.json` | Offline PR/MR Review fixture |
+| `evals/change_requests/real_pr_mr_case_studies.json` | Public real PR/MR case-study candidates |
 | `evals/datasets/v1_pr_mr_benchmark.jsonl` | V1 benchmark dataset |
+| `scripts/seed_demo.ps1` | One-command local demo seed for import, retrieval, MCP, and V1 benchmark |
+| `docs/interview/v1-real-pr-mr-case-studies.md` | GitHub/Gitee/GitLab/self-hosted GitLab interview case studies |
+| `docs/interview/v1-evaluation-scorecard.md` | Retrieval ablation and V1 metric scorecard |
+| `docs/interview/v1-interview-deep-dive-guide.md` | Structured Chinese deep-dive guide with product architecture, module principles, code anchors, boundaries, and interview talk tracks |
 | `docs/assets/screenshots/change-request-review-panel.png` | PR/MR Review screenshot |
 | `docs/assets/screenshots/mcp-tool-permissions-panel.png` | MCP permissions screenshot |
 | `docs/assets/screenshots/multi-agent-trace-panel.png` | Multi-Agent trace screenshot |
@@ -60,6 +65,7 @@ RepoLens keeps one predictable API surface while layering capability behind it:
 5. Safety: all platform and MCP integrations are read-only, execution-class tools are disabled by default, secrets are environment-only, and unsupported claims are filtered or recorded as dissent.
 6. Metrics: P0+ retrieval uses Hit@5, MRR, citation coverage, latency, and token estimates; V1 adds Review risk hits, unsupported claim rate, multi-agent dissent/arbiter metrics, and MCP permission correctness.
 7. Demo: use the runbook to show PR/MR Review, MCP permissions/audit, Multi-Agent Trace, and V1 Benchmark without network or writeback risk.
+8. Interview hardening: use the real PR/MR case studies for live-smoke credibility and the evaluation scorecard to explain BM25/vector/graph and single-main/multi-agent tradeoffs without overclaiming production quality.
 
 ## 7. Release Checklist
 
@@ -68,10 +74,11 @@ RepoLens keeps one predictable API surface while layering capability behind it:
 | README has V1 scope, architecture, APIs, demo flow, metrics, screenshots | `README.md` |
 | Runbook has PR/MR, MCP, Multi-Agent, V1 Benchmark paths | `docs/phase10-demo-runbook.md` |
 | Release package has resume and interview material | `docs/phase10-v1-release-package.md` |
+| Interview hardening docs exist | `docs/interview/v1-real-pr-mr-case-studies.md`, `docs/interview/v1-evaluation-scorecard.md`, `docs/interview/v1-interview-deep-dive-guide.md` |
+| Demo seed script exists | `scripts/seed_demo.ps1` |
 | Screenshots exist | `docs/assets/screenshots/*.png` |
 | Backend tests pass | `.\\.venv\\Scripts\\python.exe -m pytest app\\tests` |
 | Backend Ruff passes | `.\\.venv\\Scripts\\python.exe -m ruff check app` |
 | Frontend build/typecheck pass | `npm run build`, `npm exec tsc -- --noEmit` |
 | Docker Compose config passes | `docker compose config` |
 | Sensitive information scan passes | release checklist and closed-loop log |
-

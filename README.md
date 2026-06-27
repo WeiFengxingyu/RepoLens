@@ -121,6 +121,16 @@ npm install
 npm run dev
 ```
 
+### Demo Seed
+
+With the backend running, seed the local interview demo assets:
+
+```powershell
+.\scripts\seed_demo.ps1
+```
+
+The script imports `python_demo` and `ts_demo`, runs a retrieval smoke, calls the MCP endpoint, runs the V1 benchmark, and writes `.repolens/demo-seed-summary.json`.
+
 ### Docker Compose
 
 ```powershell
@@ -401,6 +411,25 @@ The V1 benchmark runner is offline and read-only. It uses local synthetic diff t
 
 Phase 10 release demo path: follow `docs/phase10-demo-runbook.md` Demo Path D and use `docs/assets/screenshots/v1-benchmark-panel.png` as the V1 benchmark proof image.
 
+## V1 Interview Hardening
+
+After the V1 release package, RepoLens adds four interview-hardening assets:
+
+| Asset | Purpose |
+| --- | --- |
+| `docs/interview/v1-real-pr-mr-case-studies.md` | Public GitHub, Gitee, GitLab.com, and self-hosted GitLab PR/MR case studies for live-smoke follow-up |
+| `docs/interview/v1-evaluation-scorecard.md` | Retrieval ablation scorecard and V1 Review/Multi-Agent/MCP metric map |
+| `docs/interview/v1-interview-deep-dive-guide.md` | Structured Chinese interview guide covering product architecture, module principles, technical choices, boundaries, and ready-to-say talk tracks |
+| `scripts/seed_demo.ps1` | One-command local demo seed that imports demo repos, runs retrieval, MCP, and V1 Benchmark API calls |
+
+The structured real-case list is stored at:
+
+```text
+evals/change_requests/real_pr_mr_case_studies.json
+```
+
+These assets are still read-only. The real PR/MR cases are credibility and live-smoke candidates, while the default demo remains deterministic through local repositories, fixtures, and offline benchmark data.
+
 ## V1 Demo Runbook
 
 The complete Phase 10 walkthrough is in:
@@ -483,6 +512,7 @@ Screenshots are stored under `docs/assets/screenshots/`:
 | P8-012 | `docs/phase8-detailed-design.md`, `docs/phase8-closed-loop-log.md`, `docs/phase8-smoke-evaluation.md`, and `docs/phase8-final-closure-review.md` | ready |
 | P9-009 | `docs/phase9-detailed-design.md`, `docs/phase9-closed-loop-log.md`, `docs/phase9-v1-benchmark-report.md`, and `docs/phase9-final-closure-review.md` | ready |
 | P10-008 | `docs/phase10-demo-runbook.md`, `docs/phase10-v1-release-package.md`, `docs/phase10-closed-loop-log.md`, and `docs/phase10-final-closure-review.md` | ready |
+| V1 interview hardening | `docs/interview/v1-real-pr-mr-case-studies.md`, `docs/interview/v1-evaluation-scorecard.md`, `docs/interview/v1-interview-deep-dive-guide.md`, `scripts/seed_demo.ps1` | ready |
 
 ## Resume Bullets
 
@@ -510,6 +540,8 @@ Screenshots are stored under `docs/assets/screenshots/`:
 
 ## Documentation
 
+- Documentation index: `docs/README.md`
+- Interview package index: `docs/interview/README.md`
 - Requirements: `docs/requirements-analysis.md`
 - Outline design: `docs/outline-design.md`
 - P0+ development plan: `docs/p0-plus-development-plan.md`
@@ -538,4 +570,7 @@ Screenshots are stored under `docs/assets/screenshots/`:
 - Phase 10 V1 release package: `docs/phase10-v1-release-package.md`
 - Phase 10 closed-loop log: `docs/phase10-closed-loop-log.md`
 - Phase 10 final closure review: `docs/phase10-final-closure-review.md`
+- V1 real PR/MR case studies: `docs/interview/v1-real-pr-mr-case-studies.md`
+- V1 evaluation scorecard: `docs/interview/v1-evaluation-scorecard.md`
+- V1 interview deep dive guide: `docs/interview/v1-interview-deep-dive-guide.md`
 - Development process log: `docs/development-worklog.md`

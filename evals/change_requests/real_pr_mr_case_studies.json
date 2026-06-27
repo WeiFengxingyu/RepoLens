@@ -1,0 +1,102 @@
+[
+  {
+    "id": "real-github-fastapi-15840",
+    "platform": "github",
+    "change_type": "pull_request",
+    "project": "fastapi/fastapi",
+    "url": "https://github.com/fastapi/fastapi/pull/15840",
+    "title": "docs(en): fix dead Ariadne docs and Ludwig v0.2 blog links",
+    "state": "closed",
+    "observed_at": "2026-06-27",
+    "source": "GitHub REST pulls API",
+    "repo_clone_url": "https://github.com/fastapi/fastapi.git",
+    "target_branch": "master",
+    "case_focus": [
+      "small documentation PR",
+      "changed link validation",
+      "low-risk review baseline"
+    ],
+    "repolens_use": "Use as a low-risk live smoke candidate after indexing the public repository. Expected output should emphasize documentation/link risk rather than security claims.",
+    "demo_status": "candidate_live_smoke"
+  },
+  {
+    "id": "real-github-fastapi-15851",
+    "platform": "github",
+    "change_type": "pull_request",
+    "project": "fastapi/fastapi",
+    "url": "https://github.com/fastapi/fastapi/pull/15851",
+    "title": "docs: update SQL database tutorials to use lifespan API",
+    "state": "closed",
+    "observed_at": "2026-06-27",
+    "source": "GitHub REST pulls API",
+    "repo_clone_url": "https://github.com/fastapi/fastapi.git",
+    "target_branch": "master",
+    "case_focus": [
+      "tutorial lifecycle API change",
+      "documentation consistency",
+      "framework migration narrative"
+    ],
+    "repolens_use": "Use to show that RepoLens can parse a real GitHub PR URL and frame a review around changed API semantics without writing comments back.",
+    "demo_status": "candidate_live_smoke"
+  },
+  {
+    "id": "real-gitee-openeuler-kernel-19747",
+    "platform": "gitee",
+    "change_type": "pull_request",
+    "project": "openeuler/kernel",
+    "url": "https://gitee.com/openeuler/kernel/pulls/19747",
+    "title": "support nmi watchdog",
+    "state": "closed",
+    "observed_at": "2026-06-27",
+    "source": "Gitee REST pulls API",
+    "repo_clone_url": "https://gitee.com/openeuler/kernel.git",
+    "target_branch": "OLK-5.10",
+    "case_focus": [
+      "large systems PR",
+      "kernel feature integration",
+      "diff-size and scope guard demonstration"
+    ],
+    "repolens_use": "Use primarily as a provider/parser and safety-boundary case. It is intentionally large, so a good RepoLens demo may stop at metadata, diff-size guard, or scoped review rather than full-indexing the kernel.",
+    "demo_status": "provider_boundary_case"
+  },
+  {
+    "id": "real-gitlab-gitlab-242806",
+    "platform": "gitlab",
+    "change_type": "merge_request",
+    "project": "gitlab-org/gitlab",
+    "url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/242806",
+    "title": "Fix outdated handbook link in AI development license docs",
+    "state": "merged",
+    "observed_at": "2026-06-27",
+    "source": "GitLab.com REST merge_requests API",
+    "repo_clone_url": "https://gitlab.com/gitlab-org/gitlab.git",
+    "target_branch": "master",
+    "case_focus": [
+      "GitLab.com MR URL parsing",
+      "AI documentation link maintenance",
+      "low-risk metadata and review smoke"
+    ],
+    "repolens_use": "Use as a GitLab.com live smoke candidate for metadata/files/diff fetch and no-writeback review behavior.",
+    "demo_status": "candidate_live_smoke"
+  },
+  {
+    "id": "real-selfhosted-gitlab-gnome-nautilus-2047",
+    "platform": "self_hosted_gitlab",
+    "change_type": "merge_request",
+    "project": "GNOME/nautilus",
+    "url": "https://gitlab.gnome.org/GNOME/nautilus/-/merge_requests/2047",
+    "title": "Fix copied files are not selected after operation ended",
+    "state": "merged",
+    "observed_at": "2026-06-27",
+    "source": "GNOME GitLab REST merge_requests API",
+    "repo_clone_url": "https://gitlab.gnome.org/GNOME/nautilus.git",
+    "target_branch": "main",
+    "case_focus": [
+      "self-hosted GitLab MR URL parsing",
+      "desktop UX regression review",
+      "provider base-url handling"
+    ],
+    "repolens_use": "Use to demonstrate that the GitLab provider is not hard-coded to gitlab.com and can derive a self-hosted API base URL.",
+    "demo_status": "candidate_live_smoke"
+  }
+]

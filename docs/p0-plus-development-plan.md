@@ -9,7 +9,7 @@
 - 依据文档：
   - `docs/requirements-analysis.md`
   - `docs/outline-design.md`
-  - `docs/resume-project-audit.md`
+  - `docs/interview/resume-project-audit.md`
 - 当前阶段：设计固化后，进入开发前计划制定
 
 ## 2. 开发策略结论

@@ -10,7 +10,7 @@
   - `docs/requirements-analysis.md`
   - `docs/outline-design.md`
   - `docs/p0-plus-development-plan.md`
-  - `docs/resume-project-audit.md`
+  - `docs/interview/resume-project-audit.md`
 
 ## 2. 当前项目架构结论
 

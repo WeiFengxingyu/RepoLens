@@ -107,7 +107,7 @@ Codex 检查当前工作区，发现工作区为空。随后创建 `docs` 目录
 
 - 按用户要求重新审核 RepoLens 题目和概要设计是否适合面向大厂的大模型应用开发简历。
 - 结合当前岗位关键词和相关技术资料，确认项目方向合理且具备亮点，但需要从普通代码问答升级为“基于代码图谱 GraphRAG 的仓库级代码智能体平台”。
-- 新增审核报告：`docs/resume-project-audit.md`。
+- 新增审核报告：`docs/interview/resume-project-audit.md`。
 - 在审核报告中给出匹配度评分、设计合理性分析、风险点、P0+ 强化边界、简历写法和面试讲法。
 
 ### 2026-06-05 工作记录 004
@@ -147,7 +147,7 @@ Codex 检查当前工作区，发现工作区为空。随后创建 `docs` 目录
 - 用户提出疑问：GitHub 本身已有 Copilot agent、coding agent 和 code review，RepoLens 项目的意义和优势是什么。
 - Codex 查询 GitHub 官方文档和 GitHub Blog，确认 Copilot 已支持 IDE Agent Mode、Cloud/Coding Agent、Code Review、Issue 到 PR 等能力。
 - Codex 明确项目定位：RepoLens 不与 Copilot 正面对抗，也不定位为 Copilot 复刻；项目价值在于展示可解释、可追溯、可评测的仓库级 Code Agent 核心链路。
-- 新增文档：`docs/competitive-positioning.md`，记录 RepoLens 与 GitHub Copilot 的差异化定位、面试回答和简历表达建议。
+- 新增文档：`docs/interview/competitive-positioning.md`，记录 RepoLens 与 GitHub Copilot 的差异化定位、面试回答和简历表达建议。
 
 ### 2026-06-05 工作记录 009
 
@@ -188,7 +188,7 @@ Codex 检查当前工作区，发现工作区为空。随后创建 `docs` 目录
 - 用户继续质疑：现在大模型网页本身已经能拿仓库地址分析代码，RepoLens 是否还有意义。
 - Codex 核对主流产品能力，确认 Claude GitHub integration、OpenAI Codex、GitHub Copilot code review/coding agent、Gemini Code Assist GitHub review 等能力已经覆盖部分仓库分析和代码审查场景。
 - 结论：RepoLens 不能定位为“仓库地址总结工具”，而应定位为“本地、多 Git 平台、可解释、可追溯、可评测、可通过 MCP 复用的代码理解基础设施”。
-- 更新 `docs/competitive-positioning.md`，新增“与通用大模型网页仓库分析的差异”章节和面试回答。
+- 更新 `docs/interview/competitive-positioning.md`，新增“与通用大模型网页仓库分析的差异”章节和面试回答。
 
 ### 2026-06-05 工作记录 014
 
