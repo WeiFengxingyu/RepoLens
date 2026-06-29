@@ -136,6 +136,7 @@ RepoLens-Java 是一个面向开发者代码理解与 PR/MR Review 场景的仓�
 | V1.2 | 动态工具发现，按 query 选择 3-5 个最相关 MCP tools，降低 tool token 开销 |
 | V1.3 | 增量索引、文件变更监听、索引版本对比 |
 | V1.4 | LLM-as-a-Judge 评测、Review 风险命中率人工标注闭环 |
+| V2-Lite | ReviewHub 分布式任务平台：Job Center + RabbitMQ/Kafka + Redis 幂等/锁/限流 + 团队规则/配额 + Grafana |
 | V2 | PostgreSQL + Redis Queue + OpenSearch/Neo4j 可替换生产化部署 |
 
 ## 6. 非功能性需求
@@ -1274,7 +1275,52 @@ sequenceDiagram
 | Demo 依赖外部模型 | 保留 deterministic fallback 和 mock chat adapter，核心链路可离线跑 |
 | 面试被问生产化 | 明确 V1 本地可复现，生产可升级 PostgreSQL、Redis Queue、OpenSearch、Neo4j、对象存储和多租户权限 |
 
-## 21. 最终判断
+## 21. V2-Lite 生产化增强建议
+
+如果需要在 RepoLens-Java 基础上补传统 Java 后端能力，不建议重新做一个割裂的秒杀、商城或调度项目。更合理的方向是将 V1/V1.1 升级为 ReviewHub：面向团队代码仓库的分布式智能评审任务平台。
+
+### 21.1 业务关联
+
+V2-Lite 的高并发与分布式能力来自 RepoLens 自身业务：
+
+- 多个 GitHub/GitLab/Gitee Webhook 同时触发 PR/MR Review。
+- 批量仓库重建索引需要拆分任务并行执行。
+- 外部平台 API、LLM、向量索引和数据库都需要限流、削峰、幂等和失败恢复。
+- 团队使用需要组织、项目、仓库、成员、规则集、配额和审计日志。
+
+### 21.2 技术范围
+
+| 方向 | 设计要求 |
+| --- | --- |
+| 分布式任务 | 新增 `analysis_job`、`job_attempt`、`job_event`，支持状态机、attempt、重试、死信、取消 |
+| MQ | RabbitMQ 作为默认工作队列，Kafka 作为可替换路线；消息只传 job id，任务 payload 以 DB 为准 |
+| Redis | 仓库级分布式锁、Webhook 幂等、用户/仓库限流、任务状态缓存 |
+| 业务系统 | 组织、项目、仓库绑定、Review Ruleset、Quota Bucket、审计日志 |
+| 可观测 | Actuator、Micrometer、Prometheus、Grafana，展示队列积压、成功率、失败原因和 p95 耗时 |
+| 前端 | Job Queue、Worker Monitor、Ruleset、Quota、Metrics 看板 |
+
+### 21.3 与 V1 主链路复用
+
+V2-Lite 不改写 V1 的核心算法链路，而是用任务平台编排已有能力：
+
+```text
+INDEX_REPOSITORY job -> 复用 V1 indexing pipeline
+REVIEW_CHANGE_REQUEST job -> 复用 V1/V1.1 ReviewService 与 ChangeRequestProvider
+MCP tool audit -> 复用 V1 MCP-style 审计表，并增加团队查询维度
+Evaluation -> 可复用 V1 benchmark，新增任务耗时、失败率、队列延迟指标
+```
+
+### 21.4 验收指标
+
+- 100 个模拟 Webhook 并发请求不会创建重复 Review job。
+- 同一仓库并发索引时只有一个任务持有仓库锁。
+- Worker 宕机后任务能通过心跳超时重新入队。
+- MQ 重复投递不会重复扣配额或重复生成报告。
+- Grafana 能展示任务成功率、队列积压、失败原因分布和 p95 耗时。
+
+详细计划见 `docs/repolens-java-v2-lite-reviewhub-plan.md`。
+
+## 22. 最终判断
 
 RepoLens-Java 适合作为 985 研究生面向 Java 全栈开发岗位的简历重点项目。它的核心优势不是“用了 AI”，而是把 Java 后端工程能力与新一代 Agent 工程能力结合起来：
 

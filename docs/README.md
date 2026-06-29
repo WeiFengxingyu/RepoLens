@@ -34,6 +34,7 @@ This directory keeps product design, phase records, release packaging, and inter
 | `repolens-java-v1-demo-runbook.md` | Repeatable Java Edition V1 demo path for repository import, Search, Ask, Review, MCP, and Eval |
 | `repolens-java-v1-release-package.md` | Java Edition V1 release package with capability map, APIs, resume bullets, tradeoffs, and verification commands |
 | `repolens-java-v1-final-closure-review.md` | Final Java Edition V1 closure review and acceptance matrix |
+| `repolens-java-v2-lite-reviewhub-plan.md` | Optional V2-Lite ReviewHub plan for distributed job center, MQ workers, Redis idempotency/lock/rate limit, team rules, quota, observability, and traditional Java backend depth |
 | `repolens-java-v0-design-and-worklog.md` | Shared lightweight detailed design and execution log for all Java Edition V0 sub-phases |
 | `repolens-java-v0-demo-runbook.md` | Repeatable Java Edition V0 demo path for local import, Lucene BM25 retrieval, frontend evidence display, tests, and known limits |
 | `repolens-java-environment.md` | Local Java environment notes and per-shell Java version switching instructions |

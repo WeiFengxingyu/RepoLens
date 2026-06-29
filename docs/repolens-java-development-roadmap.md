@@ -16,7 +16,7 @@
 RepoLens-Java 不建议一次性做成“大而全”的系统。更稳妥的方式是按产品闭环逐步迭代：
 
 ```text
-V0 可运行原型 -> V1 简历主版本 -> V1.1 真实平台增强 -> V2 生产化预留
+V0 可运行原型 -> V1 简历主版本 -> V1.1 真实平台增强 -> V2-Lite 分布式任务平台 -> V2 完整生产化预留
 ```
 
 每个版本都必须有可运行、可演示、可验收的产品形态，避免只堆模块没有闭环。
@@ -36,9 +36,10 @@ V0 可运行原型 -> V1 简历主版本 -> V1.1 真实平台增强 -> V2 生产
 | V0 | 1.5-2 周 | Java 后端最小可运行闭环 | 导入本地 Java 仓库，完成扫描、chunk、BM25 检索，前端展示证据 |
 | V1 | 4-6 周 | 简历主版本 | Spring Boot + Spring AI + MCP + 混合检索 + QA + PR Review + Trace + Evaluation |
 | V1.1 | 1.5-2 周 | 真实平台与面试增强 | GitHub/GitLab/Gitee PR/MR 只读 Provider、真实案例 runbook、截图包 |
-| V2 | 3-5 周，可选 | 生产化扩展 | 增量索引、OpenSearch/PGvector 可替换、LLM Judge、团队权限、观测面板 |
+| V2-Lite | 2-3 周，可选 | 分布式任务平台与传统后端能力补强 | ReviewHub：Job Center、RabbitMQ/Kafka、Redis 幂等/锁/限流、团队规则与配额、任务看板、Grafana |
+| V2 | 3-5 周，可选 | 完整生产化扩展 | OpenSearch/PGvector 可替换、Neo4j 可选、LLM Judge、组织级 RBAC、CI/CD、镜像发布 |
 
-推荐求职使用版本：**V1 完成即可作为简历重点项目**。V1.1 用于提高面试演示可信度。V2 不必在投简历前完成。
+推荐求职使用版本：**V1 完成即可作为简历重点项目**。V1.1 用于提高面试演示可信度。若还需要补传统 Java 后端能力，优先做 V2-Lite，而不是另起一个割裂的秒杀/商城项目。V2 完整版不必在投简历前完成。
 
 ## 4. 产品原型最终形态
 
@@ -433,11 +434,62 @@ V1.1 不是必须版本，但能显著提升项目可信度。目标是把 paste
 - 平台 token 不出现在响应、日志、trace、截图。
 - 离线 fixture 仍然可作为默认 Demo。
 
-## 16. V2：生产化预留版本
+## 16. V2-Lite：ReviewHub 分布式任务平台
+
+V2-Lite 是在 V1/V1.1 基础上的生产化增强，用来补高并发、分布式、中间件和业务系统能力。它不新建独立项目，而是把 RepoLens 的索引与 Review 主链路升级成团队级 ReviewHub。
+
+### 16.1 定位
+
+V2-Lite 解决的不是抽象的“我要用 MQ/Redis”，而是 RepoLens 的真实业务压力：
+
+```text
+GitHub/GitLab/Gitee Webhook 并发触发
+  -> API 幂等落库
+  -> MQ 异步削峰
+  -> Worker 并行执行索引或 Review
+  -> Redis 控制仓库锁、限流和幂等
+  -> PostgreSQL 记录任务、attempt、事件和审计
+  -> 前端 Job Queue + Grafana 展示任务健康度
+```
+
+### 16.2 核心模块
+
+| 模块 | 关键能力 | 和 V1 的关联 |
+| --- | --- | --- |
+| Job Center | `analysis_job`、`job_attempt`、`job_event`、状态机、重试、死信 | 承接 V1 索引任务和 V1.1 PR/MR Review |
+| MQ Worker | RabbitMQ 默认，Kafka 可替换；Worker lease、heartbeat、超时恢复 | 将同步/单机后台任务升级为可横向扩展 |
+| Redis 控制面 | 仓库级锁、Webhook 幂等、用户/仓库限流、任务状态缓存 | 保护索引、平台 API、LLM 和数据库 |
+| ReviewHub 业务域 | 组织、项目、仓库、成员、规则集、配额、审计 | 把工具升级成团队内部业务系统 |
+| 可观测性 | Actuator、Micrometer、Prometheus、Grafana、失败原因统计 | 支撑面试中的可运维和可排障追问 |
+
+### 16.3 分阶段建议
+
+| 阶段 | 目标 | 验收 |
+| --- | --- | --- |
+| V2L-P0 | Docker Compose 与 profile 收束 | PostgreSQL、Redis、RabbitMQ、Prometheus、Grafana 可启动 |
+| V2L-P1 | 通用任务中心 | 任务幂等创建、状态机、attempt、event、重试 API |
+| V2L-P2 | MQ Worker | 创建索引/Review job 后异步执行，Worker 中断可恢复 |
+| V2L-P3 | Redis 并发控制 | 同仓库索引互斥、Webhook 去重、用户/仓库限流 |
+| V2L-P4 | 团队业务域 | 组织、项目、仓库绑定、Ruleset、Quota |
+| V2L-P5 | 看板与观测 | Job Queue、Worker Monitor、Grafana 截图 |
+
+### 16.4 简历价值
+
+V2-Lite 能补足传统 Java 后端面试最常追问的内容：
+
+- MQ 异步削峰、重复消息、死信和重试。
+- Redis 分布式锁、幂等、限流和缓存。
+- PostgreSQL 任务状态机、attempt 追踪和审计日志。
+- RBAC、规则集、配额等业务系统建模。
+- Actuator、Micrometer、Prometheus、Grafana 可观测性。
+
+详细执行方案见 `docs/repolens-java-v2-lite-reviewhub-plan.md`。
+
+## 17. V2：完整生产化预留版本
 
 V2 是可选增强，不建议在求职前强行完成。它主要用于面试追问“生产化怎么做”时展示路线。
 
-### 16.1 增强方向
+### 17.1 增强方向
 
 | 模块 | 增强 |
 | --- | --- |
@@ -445,13 +497,13 @@ V2 是可选增强，不建议在求职前强行完成。它主要用于面试�
 | 搜索 | Lucene 替换 OpenSearch/Elasticsearch |
 | 向量 | Qdrant/PGvector 多租户 collection |
 | 图谱 | JGraphT/关系表升级 Neo4j 可选 |
-| 任务 | Redis 简化队列升级 RabbitMQ/Kafka |
+| 任务 | V2-Lite 的 RabbitMQ/Kafka Worker 扩展为多队列、多优先级、多租户调度 |
 | 评测 | LLM-as-a-Judge、人工标注 Review 风险 |
 | 权限 | 组织、项目、仓库级 RBAC |
 | 观测 | Grafana Dashboard、trace sampling |
 | 部署 | 多环境 profile、CI/CD、镜像发布 |
 
-### 16.2 不建议提前做的内容
+### 17.2 不建议提前做的内容
 
 - Kubernetes 全套部署。
 - 自动代码修改和提交。
@@ -459,7 +511,7 @@ V2 是可选增强，不建议在求职前强行完成。它主要用于面试�
 - 支持几十种语言。
 - 复杂自治多 Agent 讨论系统。
 
-## 17. 目录规划
+## 18. 目录规划
 
 推荐最终目录：
 
@@ -485,7 +537,7 @@ RepoLens/
   README.md
 ```
 
-## 18. 开发优先级建议
+## 19. 开发优先级建议
 
 如果时间有限，优先级如下：
 
@@ -516,7 +568,13 @@ V0 + V1-P1 + V1-P2 + V1-P3 + V1-P4
 V1 + V1.1
 ```
 
-## 19. 最终产品原型描述
+补传统 Java 后端能力版本：
+
+```text
+V1 + V1.1 + V2-Lite
+```
+
+## 20. 最终产品原型描述
 
 最终原型可以这样对外描述：
 
@@ -530,9 +588,11 @@ V1 + V1.1
 4. MCP Tool Audit：展示工具权限和 hash 审计。
 5. Evaluation：展示检索策略指标对比。
 
-## 20. 结论
+## 21. 结论
 
-RepoLens-Java 的开发应以 V1 为简历主版本目标。V0 用来快速证明 Java 后端闭环，V1 用来形成完整简历竞争力，V1.1 用来增强真实平台可信度，V2 作为生产化路线储备。
+RepoLens-Java 的开发应以 V1 为简历主版本目标。V0 用来快速证明 Java 后端闭环，V1 用来形成完整简历竞争力，V1.1 用来增强真实平台可信度，V2-Lite 用来补传统 Java 后端能力，V2 作为完整生产化路线储备。
+
+如果简历需要进一步补高并发、分布式、中间件和业务系统能力，优先把 V2-Lite 做成 ReviewHub 分布式任务平台。它与 RepoLens 主线高度相关，能自然覆盖 MQ、Redis、任务状态机、团队权限、配额和可观测性，比另做一个割裂的传统项目更实用。
 
 最重要的交付不是代码量，而是一个能讲清楚、能跑通、能截图、能评测、能被追问的产品原型：
 

@@ -59,6 +59,22 @@ RepoLens：基于 Java 21、Spring Boot 与 MCP 的仓库级 Code Agent 工作�
 | Deterministic QA/Review | Avoids LLM instability for resume demo; Spring AI adapter remains the planned replacement seam |
 | Pasted diff review | Real PR/MR providers are V1.1 scope |
 
+## Recommended Next Step
+
+If the project needs to demonstrate more traditional Java backend depth after V1/V1.1, the preferred path is V2-Lite ReviewHub instead of a separate unrelated seckill or mall project.
+
+V2-Lite turns RepoLens into a team-level distributed review task platform:
+
+| Area | Planned Depth |
+| --- | --- |
+| Distributed jobs | `analysis_job` / `job_attempt` / `job_event`, state machine, retry, dead letter, cancellation |
+| MQ | RabbitMQ-first worker queue, Kafka as a later replacement option, duplicate-message-safe consumers |
+| Redis | Repository lock, webhook idempotency, user/repository rate limit, hot job status cache |
+| Business system | Organization, project, repository binding, review ruleset, quota, audit |
+| Observability | Actuator, Micrometer, Prometheus, Grafana dashboard, failure reason statistics |
+
+Detailed plan: `docs/repolens-java-v2-lite-reviewhub-plan.md`.
+
 ## Final Verification
 
 ```powershell
