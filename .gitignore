@@ -19,6 +19,7 @@ pnpm-debug.log*
 
 # RepoLens runtime data
 .repolens/
+.repolens-java/
 *.sqlite
 *.sqlite3
 
@@ -32,6 +33,10 @@ dist/
 build/
 coverage/
 tmp-ui-logs/
+
+# Java / Maven
+.m2/
+target/
 
 # OS/editor
 .DS_Store

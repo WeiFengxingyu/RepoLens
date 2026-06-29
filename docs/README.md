@@ -18,6 +18,25 @@ This directory keeps product design, phase records, release packaging, and inter
 | --- | --- |
 | `requirements-analysis.md` | Product requirements and scope analysis |
 | `outline-design.md` | Overall architecture and module design |
+| `repolens-java-requirements-outline-design.md` | Java Edition requirements and outline design for Spring Boot, Spring AI, MCP, hybrid retrieval, security, observability, and evaluation |
+| `repolens-java-development-roadmap.md` | Java Edition staged development roadmap, version plan, phase deliverables, acceptance criteria, and final product prototype |
+| `repolens-java-v0-execution-plan.md` | Detailed executable V0 plan for the Java backend minimum loop: repository import, scanner, Java parser, chunking, Lucene BM25 retrieval, frontend evidence display, tests, and demo runbook |
+| `repolens-java-v1-phased-execution-plan.md` | Detailed executable V1 plan for async indexing, code graph, hybrid retrieval, Agent QA, PR Review, MCP, evaluation, frontend workbench, acceptance criteria, and resume positioning |
+| `repolens-java-v1-design-and-worklog.md` | Shared V1 execution record for P0-P3 detailed-design-first implementation, verification, tradeoffs, and phase closure notes |
+| `repolens-java-v1-p0-detailed-design.md` | V1-P0 detailed design for baseline hardening, profile strategy, module boundaries, and V1 process setup |
+| `repolens-java-v1-p1-detailed-design.md` | V1-P1 detailed design for async indexing tasks, task events, repository lock, retry, and indexing pipeline extraction |
+| `repolens-java-v1-p2-detailed-design.md` | V1-P2 detailed design for multi-language parsing, persisted symbols, code relations, graph queries, and parser diagnostics |
+| `repolens-java-v1-p3-detailed-design.md` | V1-P3 detailed design for deterministic local embeddings, vector chunks, hybrid retrieval, score merge, and graph expansion |
+| `repolens-java-v1-p4-detailed-design.md` | V1-P4 detailed design for deterministic Agent QA, tool calling, citations, verifier, trace persistence, and frontend response contract |
+| `repolens-java-v1-p5-detailed-design.md` | V1-P5 detailed design for unified diff parsing, rule-based risk review, retrieval-backed citations, suggested tests, markdown report, and traces |
+| `repolens-java-v1-p6-detailed-design.md` | V1-P6 detailed design for MCP-style tool registry, read-only tools/call, permission guard, audit hash, and frontend API contract |
+| `repolens-java-v1-p7-detailed-design.md` | V1-P7 detailed design for evaluation metrics, V1 workbench polish, demo runbook, release package, and final closure review |
+| `repolens-java-v1-demo-runbook.md` | Repeatable Java Edition V1 demo path for repository import, Search, Ask, Review, MCP, and Eval |
+| `repolens-java-v1-release-package.md` | Java Edition V1 release package with capability map, APIs, resume bullets, tradeoffs, and verification commands |
+| `repolens-java-v1-final-closure-review.md` | Final Java Edition V1 closure review and acceptance matrix |
+| `repolens-java-v0-design-and-worklog.md` | Shared lightweight detailed design and execution log for all Java Edition V0 sub-phases |
+| `repolens-java-v0-demo-runbook.md` | Repeatable Java Edition V0 demo path for local import, Lucene BM25 retrieval, frontend evidence display, tests, and known limits |
+| `repolens-java-environment.md` | Local Java environment notes and per-shell Java version switching instructions |
 | `p0-plus-development-plan.md` | P0+ implementation plan |
 | `v1-development-plan.md` | V1 phase plan and scope boundaries |
 | `mcp-extension-design.md` | Early MCP extension design notes |

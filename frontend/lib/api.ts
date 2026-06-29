@@ -5,6 +5,8 @@ import type {
   EvaluationRunResponse,
   EvaluationRunSummary,
   McpToolCallAudit,
+  McpToolCallRequest,
+  McpToolCallResponse,
   McpToolInfo,
   MultiAgentReviewCreateRequest,
   MultiAgentReviewResponse,
@@ -23,7 +25,7 @@ import type {
 } from "@/types/workbench";
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export const API_ROUTES = {
   health: "/health",
@@ -154,6 +156,15 @@ export async function listMcpToolCalls(limit = 50): Promise<McpToolCallAudit[]> 
   return request<McpToolCallAudit[]>(`/api/mcp/tool-calls?limit=${limit}`);
 }
 
+export async function callMcpTool(
+  payload: McpToolCallRequest
+): Promise<McpToolCallResponse> {
+  return request<McpToolCallResponse>("/api/mcp/tools/call", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -173,11 +184,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function readErrorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { detail?: unknown };
-    return normalizeErrorDetail(body.detail, response.status);
+    const body = (await response.json()) as { detail?: unknown; message?: unknown };
+    return normalizeErrorBody(body, response.status);
   } catch {
     return `Request failed with ${response.status}`;
   }
+}
+
+function normalizeErrorBody(
+  body: { detail?: unknown; message?: unknown },
+  status: number
+): string {
+  if (typeof body.message === "string" && body.message.trim()) {
+    return redactSensitiveText(body.message);
+  }
+  return normalizeErrorDetail(body.detail, status);
 }
 
 function normalizeErrorDetail(detail: unknown, status: number): string {

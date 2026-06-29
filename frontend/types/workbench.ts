@@ -10,6 +10,7 @@ export type RepositoryStatus =
   | "scanning"
   | "parsing"
   | "chunking"
+  | "indexing"
   | "ready"
   | "failed";
 
@@ -279,6 +280,23 @@ export type McpToolCallAudit = {
   error_message: string | null;
   created_at: string;
   completed_at: string | null;
+};
+
+export type McpToolCallRequest = {
+  name: string;
+  arguments: Record<string, unknown>;
+  client_name?: string;
+  client_session_id?: string;
+};
+
+export type McpToolCallResponse = {
+  id: string;
+  tool_name: string;
+  status: string;
+  permission_decision: string;
+  result: Record<string, unknown> | unknown[] | string | number | boolean | null;
+  error_message: string | null;
+  audit: McpToolCallAudit;
 };
 
 export type ReviewTaskResponse = {

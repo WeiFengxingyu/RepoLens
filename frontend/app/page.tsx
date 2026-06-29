@@ -1,17 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   API_BASE_URL,
   askRepositoryQuestion,
-  createChangeRequestReview,
+  callMcpTool,
   createEvaluation,
-  createMultiAgentReview,
   createReview,
-  createV1Benchmark,
   getRepository,
   getRepositoryStatus,
   importRepository,
+  listEvaluations,
   listMcpToolCalls,
   listMcpTools,
   listRepositories,
@@ -19,62 +19,65 @@ import {
 } from "@/lib/api";
 import type {
   AgentTrace,
-  ChangeRequestMetadata,
-  EvidenceItem,
-  EvaluationMetric,
-  EvaluationResult,
   EvaluationRunResponse,
+  EvaluationRunSummary,
   EvaluationStrategy,
+  EvidenceItem,
   McpToolCallAudit,
+  McpToolCallResponse,
   McpToolInfo,
-  AgentAssignmentResponse,
-  AgentMessageResponse,
-  MultiAgentReviewResponse,
   QACitation,
   QATaskResponse,
-  ReviewCitation,
-  ReviewRisk,
-  ReviewSuggestedTest,
-  ReviewTaskResponse,
-  ReviewToolCall,
   RepositoryDetail,
   RepositoryStatus,
   RepositoryStatusResponse,
   RepositorySummary,
   RetrievalResponse,
-  V1BenchmarkResponse,
-  V1BenchmarkSampleResult
+  ReviewCitation,
+  ReviewRisk,
+  ReviewSuggestedTest,
+  ReviewTaskResponse,
+  ReviewToolCall
 } from "@/types/workbench";
 
-const metricLabels = [
-  ["file_count", "Files"],
-  ["parsed_file_count", "Parsed"],
-  ["skipped_file_count", "Skipped"],
-  ["chunk_count", "Chunks"],
-  ["relation_count", "Relations"]
-] as const;
+type WorkbenchTab = "search" | "ask" | "review" | "mcp" | "eval";
+type AsyncState = "idle" | "running" | "ready" | "empty" | "failed";
 
-const demoRetrievalQuery =
-  "Where is repository import implemented and which scanner chunking modules does it use?";
-const demoQuestion =
-  "Describe the frontend data flow from DashboardPage to RepositoryList and the repository API client.";
-const demoReviewDiff = `diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
---- a/src/app/dashboard/page.tsx
-+++ b/src/app/dashboard/page.tsx
-@@ -1,8 +1,9 @@
- export default async function DashboardPage() {
-   const repositories = await fetchRepositories();
-+  const visible = repositories.slice(0, 5);
-   return (
-     <main>
-       <h1>RepoLens Dashboard</h1>
--      <RepositoryList repositories={repositories} />
-+      <RepositoryList repositories={visible} />
-     </main>
-   );
-}`;
-const demoChangeRequestUrl = "https://github.com/openai/repolens/pull/42";
-type ReviewMode = "diff" | "change-request" | "multi-agent";
+const tabs: Array<{ id: WorkbenchTab; label: string }> = [
+  { id: "search", label: "Search" },
+  { id: "ask", label: "Ask" },
+  { id: "review", label: "Review" },
+  { id: "mcp", label: "MCP" },
+  { id: "eval", label: "Eval" }
+];
+
+const metricLabels: Array<{
+  key: keyof Pick<
+    RepositoryDetail,
+    "file_count" | "parsed_file_count" | "skipped_file_count" | "chunk_count" | "relation_count"
+  >;
+  label: string;
+}> = [
+  { key: "file_count", label: "Files" },
+  { key: "parsed_file_count", label: "Parsed" },
+  { key: "skipped_file_count", label: "Skipped" },
+  { key: "chunk_count", label: "Chunks" },
+  { key: "relation_count", label: "Relations" }
+];
+
+const defaultQuery = "RepositoryApplicationService index task retrieval";
+const defaultQuestion = "Where is repository import and indexing started?";
+const defaultDiff = `diff --git a/src/main/java/com/demo/SecurityConfig.java b/src/main/java/com/demo/SecurityConfig.java
+--- a/src/main/java/com/demo/SecurityConfig.java
++++ b/src/main/java/com/demo/SecurityConfig.java
+@@ -2,6 +2,8 @@ package demo;
+ class SecurityConfig {
+   void configure() {
+-    requireAuth();
++    permitAll();
++    return null;
+   }
+ }`;
 
 export default function Home() {
   const [source, setSource] = useState("");
@@ -82,89 +85,69 @@ export default function Home() {
   const [repositories, setRepositories] = useState<RepositorySummary[]>([]);
   const [selectedRepository, setSelectedRepository] = useState<RepositoryDetail | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<RepositoryStatusResponse | null>(null);
-  const [query, setQuery] = useState(demoRetrievalQuery);
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>("search");
+
+  const [query, setQuery] = useState(defaultQuery);
   const [topK, setTopK] = useState(10);
   const [useBm25, setUseBm25] = useState(true);
   const [useVector, setUseVector] = useState(true);
   const [useGraph, setUseGraph] = useState(true);
-  const [question, setQuestion] = useState(demoQuestion);
-  const [qaTopK, setQaTopK] = useState(8);
-  const [qaUseBm25, setQaUseBm25] = useState(true);
-  const [qaUseVector, setQaUseVector] = useState(true);
-  const [qaUseGraph, setQaUseGraph] = useState(true);
-  const [qaResult, setQaResult] = useState<QATaskResponse | null>(null);
-  const [qaState, setQaState] = useState<"idle" | "asking" | "ready" | "failed">("idle");
-  const [qaError, setQaError] = useState<string | null>(null);
-  const [diffText, setDiffText] = useState(demoReviewDiff);
-  const [reviewTopK, setReviewTopK] = useState(8);
-  const [reviewUseBm25, setReviewUseBm25] = useState(true);
-  const [reviewUseVector, setReviewUseVector] = useState(true);
-  const [reviewUseGraph, setReviewUseGraph] = useState(true);
-  const [reviewRunStaticCheck, setReviewRunStaticCheck] = useState(false);
-  const [reviewMode, setReviewMode] = useState<ReviewMode>("diff");
-  const [changeRequestUrl, setChangeRequestUrl] = useState(demoChangeRequestUrl);
-  const [changeRequestMetadata, setChangeRequestMetadata] =
-    useState<ChangeRequestMetadata | null>(null);
-  const [reviewResult, setReviewResult] = useState<ReviewTaskResponse | null>(null);
-  const [multiAgentResult, setMultiAgentResult] = useState<MultiAgentReviewResponse | null>(null);
-  const [reviewState, setReviewState] = useState<"idle" | "reviewing" | "ready" | "failed">("idle");
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [evaluationName, setEvaluationName] = useState("P0+ baseline");
-  const [evaluationDatasetPath, setEvaluationDatasetPath] = useState(
-    "evals/datasets/p0_plus_eval.jsonl"
-  );
-  const [evaluationStrategy, setEvaluationStrategy] = useState<EvaluationStrategy>("all");
-  const [evaluationRepositoryKey, setEvaluationRepositoryKey] = useState("python_demo,ts_demo");
-  const [evaluationTopK, setEvaluationTopK] = useState(5);
-  const [evaluationResult, setEvaluationResult] = useState<EvaluationRunResponse | null>(null);
-  const [evaluationState, setEvaluationState] = useState<
-    "idle" | "running" | "ready" | "failed"
-  >("idle");
-  const [evaluationError, setEvaluationError] = useState<string | null>(null);
-  const [v1BenchmarkName, setV1BenchmarkName] = useState("V1 benchmark");
-  const [v1BenchmarkDatasetPath, setV1BenchmarkDatasetPath] = useState(
-    "evals/datasets/v1_pr_mr_benchmark.jsonl"
-  );
-  const [v1BenchmarkRepositoryKey, setV1BenchmarkRepositoryKey] =
-    useState("python_demo,ts_demo");
-  const [v1BenchmarkTopK, setV1BenchmarkTopK] = useState(5);
-  const [v1BenchmarkIncludeReview, setV1BenchmarkIncludeReview] = useState(true);
-  const [v1BenchmarkIncludeMultiAgent, setV1BenchmarkIncludeMultiAgent] = useState(true);
-  const [v1BenchmarkIncludeMcp, setV1BenchmarkIncludeMcp] = useState(true);
-  const [v1BenchmarkResult, setV1BenchmarkResult] = useState<V1BenchmarkResponse | null>(null);
-  const [v1BenchmarkState, setV1BenchmarkState] = useState<
-    "idle" | "running" | "ready" | "failed"
-  >("idle");
-  const [v1BenchmarkError, setV1BenchmarkError] = useState<string | null>(null);
-  const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([]);
-  const [mcpToolCalls, setMcpToolCalls] = useState<McpToolCallAudit[]>([]);
-  const [mcpState, setMcpState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
-  const [mcpError, setMcpError] = useState<string | null>(null);
   const [retrievalResult, setRetrievalResult] = useState<RetrievalResponse | null>(null);
-  const [retrievalState, setRetrievalState] = useState<
-    "idle" | "searching" | "ready" | "empty" | "failed"
-  >("idle");
+  const [retrievalState, setRetrievalState] = useState<AsyncState>("idle");
   const [retrievalError, setRetrievalError] = useState<string | null>(null);
+
+  const [question, setQuestion] = useState(defaultQuestion);
+  const [qaResult, setQaResult] = useState<QATaskResponse | null>(null);
+  const [qaState, setQaState] = useState<AsyncState>("idle");
+  const [qaError, setQaError] = useState<string | null>(null);
+
+  const [diffText, setDiffText] = useState(defaultDiff);
+  const [reviewResult, setReviewResult] = useState<ReviewTaskResponse | null>(null);
+  const [reviewState, setReviewState] = useState<AsyncState>("idle");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([]);
+  const [mcpAudits, setMcpAudits] = useState<McpToolCallAudit[]>([]);
+  const [mcpCallResult, setMcpCallResult] = useState<McpToolCallResponse | null>(null);
+  const [mcpState, setMcpState] = useState<AsyncState>("idle");
+  const [mcpError, setMcpError] = useState<string | null>(null);
+
+  const [evaluationName, setEvaluationName] = useState("java-v1-demo");
+  const [evaluationDataset, setEvaluationDataset] = useState("evals/datasets/repolens_java_v1_eval.jsonl");
+  const [evaluationStrategy, setEvaluationStrategy] = useState<EvaluationStrategy>("all");
+  const [evaluationResult, setEvaluationResult] = useState<EvaluationRunResponse | null>(null);
+  const [evaluationRuns, setEvaluationRuns] = useState<EvaluationRunSummary[]>([]);
+  const [evaluationState, setEvaluationState] = useState<AsyncState>("idle");
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void loadRepositories();
-    void loadMcpPanel();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "mcp") {
+      void loadMcpData();
+    }
+    if (activeTab === "eval") {
+      void loadEvaluationRuns();
+    }
+  }, [activeTab]);
 
   const selectedMetrics = useMemo(() => {
     if (!selectedRepository) {
       return [];
     }
-    return metricLabels.map(([key, label]) => ({
-      key,
-      label,
-      value: selectedRepository[key]
+    return metricLabels.map((metric) => ({
+      ...metric,
+      value: selectedRepository[metric.key]
     }));
   }, [selectedRepository]);
-  const displayedReview = reviewResult ?? multiAgentResult;
+
+  const isReady = selectedRepository?.status === "ready";
 
   async function loadRepositories(preferredId?: string) {
     setIsLoading(true);
@@ -201,30 +184,10 @@ export default function Home() {
     setQaState("idle");
     setQaError(null);
     setReviewResult(null);
-    setMultiAgentResult(null);
-    setChangeRequestMetadata(null);
     setReviewState("idle");
     setReviewError(null);
+    setMcpCallResult(null);
     setEvaluationResult(null);
-    setEvaluationState("idle");
-    setEvaluationError(null);
-    setV1BenchmarkResult(null);
-    setV1BenchmarkState("idle");
-    setV1BenchmarkError(null);
-  }
-
-  async function loadMcpPanel() {
-    setMcpState("loading");
-    setMcpError(null);
-    try {
-      const [tools, toolCalls] = await Promise.all([listMcpTools(), listMcpToolCalls(30)]);
-      setMcpTools(tools);
-      setMcpToolCalls(toolCalls);
-      setMcpState("ready");
-    } catch (error) {
-      setMcpState("failed");
-      setMcpError(error instanceof Error ? error.message : "Unable to load MCP tools.");
-    }
   }
 
   async function handleImport(event: FormEvent<HTMLFormElement>) {
@@ -264,16 +227,10 @@ export default function Home() {
       return;
     }
 
-    setRetrievalState("searching");
+    setRetrievalState("running");
     setRetrievalError(null);
     try {
-      const result = await retrieveRepository(selectedRepository.id, {
-        query: query.trim(),
-        top_k: topK,
-        use_bm25: useBm25,
-        use_vector: useVector,
-        use_graph: useGraph
-      });
+      const result = await retrieveRepository(selectedRepository.id, retrievalPayload(query));
       setRetrievalResult(result);
       setRetrievalState(result.evidences.length > 0 ? "ready" : "empty");
     } catch (error) {
@@ -296,19 +253,18 @@ export default function Home() {
       return;
     }
 
-    setQaState("asking");
+    setQaState("running");
     setQaError(null);
     try {
       const result = await askRepositoryQuestion(selectedRepository.id, {
         question: question.trim(),
-        top_k: qaTopK,
-        use_bm25: qaUseBm25,
-        use_vector: qaUseVector,
-        use_graph: qaUseGraph
+        top_k: topK,
+        use_bm25: useBm25,
+        use_vector: useVector,
+        use_graph: useGraph
       });
       setQaResult(result);
-      setQaState(result.status === "failed" ? "failed" : "ready");
-      setQaError(result.error_message);
+      setQaState(result.citations.length > 0 ? "ready" : "empty");
     } catch (error) {
       setQaResult(null);
       setQaState("failed");
@@ -323,74 +279,84 @@ export default function Home() {
       setReviewState("failed");
       return;
     }
-    if ((reviewMode === "diff" || reviewMode === "multi-agent") && !diffText.trim()) {
+    if (!diffText.trim()) {
       setReviewError("Diff text is required.");
       setReviewState("failed");
       return;
     }
-    if (reviewMode === "change-request" && !changeRequestUrl.trim()) {
-      setReviewError("PR/MR URL is required.");
+
+    setReviewState("running");
+    setReviewError(null);
+    try {
+      const result = await createReview(selectedRepository.id, {
+        diff_text: diffText,
+        top_k: topK,
+        use_bm25: useBm25,
+        use_vector: useVector,
+        use_graph: useGraph,
+        run_static_check: false
+      });
+      setReviewResult(result);
+      setReviewState("ready");
+    } catch (error) {
+      setReviewResult(null);
       setReviewState("failed");
+      setReviewError(error instanceof Error ? error.message : "Review failed.");
+    }
+  }
+
+  async function loadMcpData() {
+    setMcpState("running");
+    setMcpError(null);
+    try {
+      const [tools, audits] = await Promise.all([listMcpTools(), listMcpToolCalls(30)]);
+      setMcpTools(tools);
+      setMcpAudits(audits);
+      setMcpState(tools.length || audits.length ? "ready" : "empty");
+    } catch (error) {
+      setMcpState("failed");
+      setMcpError(error instanceof Error ? error.message : "Unable to load MCP data.");
+    }
+  }
+
+  async function handleMcpSearch() {
+    if (!selectedRepository || selectedRepository.status !== "ready") {
+      setMcpError("Select a ready repository first.");
+      setMcpState("failed");
       return;
     }
 
-    setReviewState("reviewing");
-    setReviewError(null);
-    setReviewResult(null);
-    setMultiAgentResult(null);
-    setChangeRequestMetadata(null);
+    setMcpState("running");
+    setMcpError(null);
     try {
-      let review: ReviewTaskResponse;
-      let metadata: ChangeRequestMetadata | null = null;
-
-      if (reviewMode === "diff") {
-        review = await createReview(selectedRepository.id, {
-          diff_text: diffText.trim(),
-          top_k: reviewTopK,
-          use_bm25: reviewUseBm25,
-          use_vector: reviewUseVector,
-          use_graph: reviewUseGraph,
-          run_static_check: reviewRunStaticCheck
-        });
-      } else if (reviewMode === "multi-agent") {
-        const result = await createMultiAgentReview(selectedRepository.id, {
-          diff_text: diffText.trim(),
-          top_k: reviewTopK,
-          use_bm25: reviewUseBm25,
-          use_vector: reviewUseVector,
-          use_graph: reviewUseGraph,
-          run_static_check: reviewRunStaticCheck,
-          round_limit: 2,
-          assignment_limit: 8,
-          token_budget: 8000
-        });
-        setMultiAgentResult(result);
-        setReviewState(result.status === "failed" ? "failed" : "ready");
-        setReviewError(result.error_message);
-        return;
-      } else {
-        const response = await createChangeRequestReview(selectedRepository.id, {
-          url: changeRequestUrl.trim(),
-          top_k: reviewTopK,
-          use_bm25: reviewUseBm25,
-          use_vector: reviewUseVector,
-          use_graph: reviewUseGraph,
-          run_static_check: reviewRunStaticCheck
-        });
-        review = response.review;
-        metadata = response.change_request;
-      }
-
-      setReviewResult(review);
-      setChangeRequestMetadata(metadata);
-      setReviewState(review.status === "failed" ? "failed" : "ready");
-      setReviewError(review.error_message);
+      const result = await callMcpTool({
+        name: "repolens.search",
+        arguments: {
+          repository_id: selectedRepository.id,
+          query: query.trim() || defaultQuery,
+          top_k: topK,
+          use_bm25: useBm25,
+          use_vector: useVector,
+          use_graph: useGraph
+        },
+        client_name: "workbench",
+        client_session_id: "java-v1-demo"
+      });
+      setMcpCallResult(result);
+      const audits = await listMcpToolCalls(30);
+      setMcpAudits(audits);
+      setMcpState("ready");
     } catch (error) {
-      setReviewResult(null);
-      setMultiAgentResult(null);
-      setChangeRequestMetadata(null);
-      setReviewState("failed");
-      setReviewError(error instanceof Error ? error.message : "Review failed.");
+      setMcpState("failed");
+      setMcpError(error instanceof Error ? error.message : "MCP call failed.");
+    }
+  }
+
+  async function loadEvaluationRuns() {
+    try {
+      setEvaluationRuns(await listEvaluations());
+    } catch {
+      setEvaluationRuns([]);
     }
   }
 
@@ -401,26 +367,8 @@ export default function Home() {
       setEvaluationState("failed");
       return;
     }
-    if (!evaluationDatasetPath.trim()) {
+    if (!evaluationDataset.trim()) {
       setEvaluationError("Dataset path is required.");
-      setEvaluationState("failed");
-      return;
-    }
-    const repositoryMap = buildEvaluationRepositoryMap(
-      evaluationRepositoryKey,
-      repositories,
-      selectedRepository
-    );
-    if (!Object.keys(repositoryMap).length) {
-      setEvaluationError("Repository key is required.");
-      setEvaluationState("failed");
-      return;
-    }
-    const missingKeys = evaluationRepositoryKeys(evaluationRepositoryKey).filter(
-      (key) => !repositoryMap[key]
-    );
-    if (missingKeys.length) {
-      setEvaluationError(`Missing ready repository for key(s): ${missingKeys.join(", ")}`);
       setEvaluationState("failed");
       return;
     }
@@ -429,15 +377,17 @@ export default function Home() {
     setEvaluationError(null);
     try {
       const result = await createEvaluation({
-        name: evaluationName.trim() || "P0+ baseline",
-        dataset_path: evaluationDatasetPath.trim(),
+        name: evaluationName.trim() || undefined,
+        dataset_path: evaluationDataset.trim(),
         strategy: evaluationStrategy,
-        repository_map: repositoryMap,
-        top_k: evaluationTopK
+        repository_map: {
+          java_demo: selectedRepository.id
+        },
+        top_k: Math.min(20, Math.max(1, topK))
       });
       setEvaluationResult(result);
-      setEvaluationState(result.status === "failed" ? "failed" : "ready");
-      setEvaluationError(result.error_message);
+      setEvaluationRuns(await listEvaluations());
+      setEvaluationState("ready");
     } catch (error) {
       setEvaluationResult(null);
       setEvaluationState("failed");
@@ -445,52 +395,14 @@ export default function Home() {
     }
   }
 
-  async function handleV1Benchmark(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedRepository || selectedRepository.status !== "ready") {
-      setV1BenchmarkError("Select a ready repository first.");
-      setV1BenchmarkState("failed");
-      return;
-    }
-    if (!v1BenchmarkDatasetPath.trim()) {
-      setV1BenchmarkError("Benchmark dataset path is required.");
-      setV1BenchmarkState("failed");
-      return;
-    }
-    const repositoryMap = buildEvaluationRepositoryMap(
-      v1BenchmarkRepositoryKey,
-      repositories,
-      selectedRepository
-    );
-    const missingKeys = evaluationRepositoryKeys(v1BenchmarkRepositoryKey).filter(
-      (key) => !repositoryMap[key]
-    );
-    if (missingKeys.length) {
-      setV1BenchmarkError(`Missing ready repository for key(s): ${missingKeys.join(", ")}`);
-      setV1BenchmarkState("failed");
-      return;
-    }
-
-    setV1BenchmarkState("running");
-    setV1BenchmarkError(null);
-    setV1BenchmarkResult(null);
-    try {
-      const result = await createV1Benchmark({
-        name: v1BenchmarkName.trim() || "V1 benchmark",
-        dataset_path: v1BenchmarkDatasetPath.trim(),
-        repository_map: repositoryMap,
-        include_review: v1BenchmarkIncludeReview,
-        include_multi_agent: v1BenchmarkIncludeMultiAgent,
-        include_mcp: v1BenchmarkIncludeMcp,
-        top_k: v1BenchmarkTopK
-      });
-      setV1BenchmarkResult(result);
-      setV1BenchmarkState(result.status === "failed" ? "failed" : "ready");
-    } catch (error) {
-      setV1BenchmarkResult(null);
-      setV1BenchmarkState("failed");
-      setV1BenchmarkError(error instanceof Error ? error.message : "V1 benchmark failed.");
-    }
+  function retrievalPayload(value: string) {
+    return {
+      query: value.trim(),
+      top_k: topK,
+      use_bm25: useBm25,
+      use_vector: useVector,
+      use_graph: useGraph
+    };
   }
 
   return (
@@ -498,52 +410,25 @@ export default function Home() {
       <section className="mx-auto flex max-w-7xl flex-col gap-5">
         <header className="flex flex-col gap-2 border-b border-line pb-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-medium text-muted">RepoLens Workbench</p>
-            <h1 className="text-2xl font-semibold">Repository Review</h1>
+            <p className="text-sm font-medium text-muted">RepoLens Java</p>
+            <h1 className="text-2xl font-semibold">V1 Code Agent Workbench</h1>
           </div>
-          <div className="text-sm text-muted">Phase 10</div>
+          <div className="text-sm text-muted">Java 21 / Spring Boot / MCP</div>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+        {errorMessage ? <Alert tone="red" message={errorMessage} /> : null}
+
+        <section className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="flex flex-col gap-4">
-            <form className="rounded-md border border-line bg-white p-4" onSubmit={handleImport}>
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-base font-semibold">Repository</h2>
-                <StatusBadge status={selectedRepository?.status ?? "pending"} />
-              </div>
-
-              <label className="mt-4 block text-xs font-medium uppercase text-muted" htmlFor="source">
-                Source
-              </label>
-              <input
-                id="source"
-                className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
-                placeholder="F:\\Desktop\\agent"
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-              />
-
-              <label className="mt-3 block text-xs font-medium uppercase text-muted" htmlFor="branch">
-                Branch
-              </label>
-              <input
-                id="branch"
-                className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
-                placeholder="main"
-                value={branch}
-                onChange={(event) => setBranch(event.target.value)}
-              />
-
-              <button
-                className="mt-4 w-full rounded-md bg-ink px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
-                disabled={isSubmitting}
-                type="submit"
-              >
-                {isSubmitting ? "Importing" : "Import"}
-              </button>
-
-              <div className="mt-3 text-xs text-muted">{API_BASE_URL}</div>
-            </form>
+            <RepositoryImportForm
+              branch={branch}
+              isSubmitting={isSubmitting}
+              selectedRepository={selectedRepository}
+              source={source}
+              onBranchChange={setBranch}
+              onSourceChange={setSource}
+              onSubmit={handleImport}
+            />
 
             <section className="rounded-md border border-line bg-white p-4">
               <div className="flex items-center justify-between gap-3">
@@ -560,649 +445,430 @@ export default function Home() {
 
               <div className="mt-3 flex flex-col gap-2">
                 {repositories.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
-                    No repositories
-                  </div>
+                  <EmptyState label={isLoading ? "Loading" : "No repositories"} />
                 ) : (
                   repositories.map((repository) => (
-                    <button
+                    <RepositoryListItem
                       key={repository.id}
-                      className={`rounded-md border px-3 py-3 text-left ${
-                        selectedRepository?.id === repository.id
-                          ? "border-ink bg-surface"
-                          : "border-line bg-white"
-                      }`}
-                      onClick={() => void selectRepository(repository.id)}
-                      type="button"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 truncate text-sm font-medium">{repository.name}</div>
-                        <StatusBadge status={repository.status} />
-                      </div>
-                      <div className="mt-2 flex gap-3 text-xs text-muted">
-                        <span>{repository.file_count} files</span>
-                        <span>{repository.chunk_count} chunks</span>
-                        <span>{repository.relation_count} relations</span>
-                      </div>
-                    </button>
+                      active={selectedRepository?.id === repository.id}
+                      repository={repository}
+                      onSelect={() => void selectRepository(repository.id)}
+                    />
                   ))
                 )}
               </div>
             </section>
+
+            <section className="rounded-md border border-line bg-white p-4">
+              <h2 className="text-base font-semibold">Runtime</h2>
+              <div className="mt-3 break-all text-xs text-muted">{API_BASE_URL}</div>
+            </section>
           </aside>
 
           <section className="min-w-0 flex flex-col gap-4">
-            {errorMessage ? (
-              <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                {errorMessage}
-              </div>
-            ) : null}
-
-            <section className="rounded-md border border-line bg-white p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {selectedRepository?.name ?? "No repository selected"}
-                  </h2>
-                  <p className="mt-1 break-all text-sm text-muted">
-                    {selectedRepository?.local_path ?? "Import or select a repository."}
-                  </p>
-                </div>
-                <StatusBadge status={selectedRepository?.status ?? "pending"} />
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {selectedMetrics.map((metric) => (
-                  <Metric key={metric.key} label={metric.label} value={metric.value} />
-                ))}
-              </div>
-            </section>
-
-            <section className="grid min-w-0 gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-              <article className="rounded-md border border-line bg-white p-4">
-                <h2 className="text-base font-semibold">Languages</h2>
-                <div className="mt-4 flex flex-col gap-3">
-                  {selectedRepository &&
-                  Object.keys(selectedRepository.language_summary).length > 0 ? (
-                    Object.entries(selectedRepository.language_summary).map(([language, count]) => (
-                      <LanguageRow key={language} count={count} language={language} />
-                    ))
-                  ) : (
-                    <div className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
-                      No language data
-                    </div>
-                  )}
-                </div>
-              </article>
-
-              <article className="rounded-md border border-line bg-white p-4">
-                <h2 className="text-base font-semibold">Index Status</h2>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <InfoItem label="Current step" value={selectedStatus?.progress.current_step ?? "-"} />
-                  <InfoItem label="Source type" value={selectedRepository?.source_type ?? "-"} />
-                  <InfoItem label="Branch" value={selectedRepository?.branch ?? "-"} />
-                  <InfoItem
-                    label="Commit"
-                    value={selectedRepository?.commit_hash?.slice(0, 12) ?? "-"}
-                  />
-                  <InfoItem
-                    label="Updated"
-                    value={formatDate(selectedRepository?.updated_at)}
-                  />
-                  <InfoItem
-                    label="Indexed"
-                    value={formatDate(selectedRepository?.indexed_at)}
-                  />
-                </div>
-                {selectedRepository?.error_message || selectedStatus?.error_message ? (
-                  <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                    {selectedRepository?.error_message ?? selectedStatus?.error_message}
-                  </div>
-                ) : null}
-              </article>
-            </section>
-
-            <McpPermissionsPanel
-              error={mcpError}
-              state={mcpState}
-              toolCalls={mcpToolCalls}
-              tools={mcpTools}
-              onRefresh={() => void loadMcpPanel()}
+            <RepositoryOverview
+              metrics={selectedMetrics}
+              repository={selectedRepository}
+              status={selectedStatus}
             />
 
-            <section className="min-w-0 rounded-md border border-line bg-white p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <section className="rounded-md border border-line bg-white p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-base font-semibold">Evaluation</h2>
-                  <div className="mt-1 text-sm text-muted">{evaluationState}</div>
+                  <h2 className="text-base font-semibold">Workspace</h2>
+                  <div className="mt-1 text-sm text-muted">{activeTabStatus()}</div>
                 </div>
-                {evaluationResult ? (
-                  <div className="rounded-md border border-line bg-surface px-3 py-2 text-right">
-                    <div className="text-xs uppercase text-muted">Samples</div>
-                    <div className="text-sm font-semibold">{evaluationResult.sample_count}</div>
-                  </div>
-                ) : null}
-              </div>
-
-              <form className="mt-4 grid gap-3" onSubmit={handleEvaluation}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={evaluationState === "running"}
-                    value={evaluationName}
-                    onChange={(event) => setEvaluationName(event.target.value)}
-                  />
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={evaluationState === "running"}
-                    value={evaluationDatasetPath}
-                    onChange={(event) => setEvaluationDatasetPath(event.target.value)}
-                  />
-                </div>
-                <div className="grid gap-3 md:grid-cols-[1fr_140px_120px_auto] md:items-center">
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={evaluationState === "running"}
-                    value={evaluationRepositoryKey}
-                    onChange={(event) => setEvaluationRepositoryKey(event.target.value)}
-                  />
-                  <select
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={evaluationState === "running"}
-                    value={evaluationStrategy}
-                    onChange={(event) =>
-                      setEvaluationStrategy(event.target.value as EvaluationStrategy)
-                    }
-                  >
-                    <option value="all">all</option>
-                    <option value="vector_only">vector_only</option>
-                    <option value="bm25_vector">bm25_vector</option>
-                    <option value="bm25_vector_graph">bm25_vector_graph</option>
-                  </select>
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={evaluationState === "running"}
-                    min={1}
-                    max={20}
-                    type="number"
-                    value={evaluationTopK}
-                    onChange={(event) => setEvaluationTopK(Number(event.target.value))}
-                  />
-                  <button
-                    className="min-h-10 rounded-md bg-ink px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
-                    disabled={
-                      !selectedRepository ||
-                      selectedRepository.status !== "ready" ||
-                      evaluationState === "running"
-                    }
-                    type="submit"
-                  >
-                    {evaluationState === "running" ? "Running" : "Run"}
-                  </button>
-                </div>
-              </form>
-
-              {evaluationError ? (
-                <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  {evaluationError}
-                </div>
-              ) : null}
-
-              {evaluationResult?.warnings.length ? (
-                <div className="mt-4 flex flex-col gap-2">
-                  {evaluationResult.warnings.slice(0, 5).map((warning) => (
-                    <div
-                      key={warning}
-                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-                    >
-                      {warning}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              {evaluationResult?.metrics.length ? (
-                <EvaluationMetricsTable metrics={evaluationResult.metrics} />
-              ) : null}
-
-              {evaluationResult?.results.length ? (
-                <EvaluationResultsTable results={evaluationResult.results} />
-              ) : null}
-
-              <div className="mt-5 border-t border-line pt-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold">V1 Benchmark</h3>
-                    <div className="mt-1 text-sm text-muted">{v1BenchmarkState}</div>
-                  </div>
-                  {v1BenchmarkResult ? (
-                    <div className="rounded-md border border-line bg-surface px-3 py-2 text-right">
-                      <div className="text-xs uppercase text-muted">Samples</div>
-                      <div className="text-sm font-semibold">{v1BenchmarkResult.sample_count}</div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <form className="mt-4 grid gap-3" onSubmit={handleV1Benchmark}>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <input
-                      className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                      disabled={v1BenchmarkState === "running"}
-                      value={v1BenchmarkName}
-                      onChange={(event) => setV1BenchmarkName(event.target.value)}
-                    />
-                    <input
-                      className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                      disabled={v1BenchmarkState === "running"}
-                      value={v1BenchmarkDatasetPath}
-                      onChange={(event) => setV1BenchmarkDatasetPath(event.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-[1fr_120px_auto] md:items-center">
-                    <input
-                      className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                      disabled={v1BenchmarkState === "running"}
-                      value={v1BenchmarkRepositoryKey}
-                      onChange={(event) => setV1BenchmarkRepositoryKey(event.target.value)}
-                    />
-                    <input
-                      className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                      disabled={v1BenchmarkState === "running"}
-                      min={1}
-                      max={20}
-                      type="number"
-                      value={v1BenchmarkTopK}
-                      onChange={(event) => setV1BenchmarkTopK(Number(event.target.value))}
-                    />
+                <div className="flex flex-wrap gap-2">
+                  {tabs.map((tab) => (
                     <button
-                      className="min-h-10 rounded-md bg-ink px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
-                      disabled={
-                        !selectedRepository ||
-                        selectedRepository.status !== "ready" ||
-                        v1BenchmarkState === "running"
-                      }
-                      type="submit"
+                      key={tab.id}
+                      className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
+                        activeTab === tab.id
+                          ? "border-ink bg-ink text-white"
+                          : "border-line bg-white text-ink"
+                      }`}
+                      onClick={() => setActiveTab(tab.id)}
+                      type="button"
                     >
-                      {v1BenchmarkState === "running" ? "Running" : "Run V1 Benchmark"}
+                      {tab.label}
                     </button>
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-sm text-muted">
-                    <Toggle
-                      label="Review"
-                      checked={v1BenchmarkIncludeReview}
-                      onChange={setV1BenchmarkIncludeReview}
-                    />
-                    <Toggle
-                      label="Multi-Agent"
-                      checked={v1BenchmarkIncludeMultiAgent}
-                      onChange={setV1BenchmarkIncludeMultiAgent}
-                    />
-                    <Toggle label="MCP" checked={v1BenchmarkIncludeMcp} onChange={setV1BenchmarkIncludeMcp} />
-                  </div>
-                </form>
-
-                {v1BenchmarkError ? (
-                  <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                    {v1BenchmarkError}
-                  </div>
-                ) : null}
-
-                {v1BenchmarkResult ? <V1BenchmarkPanel result={v1BenchmarkResult} /> : null}
-              </div>
-            </section>
-
-            <section className="rounded-md border border-line bg-white p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold">Ask</h2>
-                  <div className="mt-1 text-sm text-muted">{qaState}</div>
-                </div>
-                {qaResult?.confidence !== null && qaResult?.confidence !== undefined ? (
-                  <div className="rounded-md border border-line bg-surface px-3 py-2 text-right">
-                    <div className="text-xs uppercase text-muted">Confidence</div>
-                    <div className="text-sm font-semibold">{formatScore(qaResult.confidence)}</div>
-                  </div>
-                ) : null}
-              </div>
-
-              <form className="mt-4 grid gap-3" onSubmit={handleAsk}>
-                <textarea
-                  className="min-h-24 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                  disabled={!selectedRepository || qaState === "asking"}
-                  placeholder="Where is repository import implemented?"
-                  value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
-                />
-                <div className="grid gap-3 md:grid-cols-[120px_1fr_auto] md:items-center">
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={qaState === "asking"}
-                    min={1}
-                    max={20}
-                    type="number"
-                    value={qaTopK}
-                    onChange={(event) => setQaTopK(Number(event.target.value))}
-                  />
-                  <div className="flex flex-wrap gap-3 text-sm text-muted">
-                    <Toggle label="BM25" checked={qaUseBm25} onChange={setQaUseBm25} />
-                    <Toggle label="Vector" checked={qaUseVector} onChange={setQaUseVector} />
-                    <Toggle label="Graph" checked={qaUseGraph} onChange={setQaUseGraph} />
-                  </div>
-                  <button
-                    className="min-h-10 rounded-md bg-ink px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
-                    disabled={
-                      !selectedRepository ||
-                      selectedRepository.status !== "ready" ||
-                      qaState === "asking"
-                    }
-                    type="submit"
-                  >
-                    {qaState === "asking" ? "Asking" : "Ask"}
-                  </button>
-                </div>
-              </form>
-
-              {qaError ? (
-                <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  {qaError}
-                </div>
-              ) : null}
-
-              {qaResult?.warnings.length ? (
-                <div className="mt-4 flex flex-col gap-2">
-                  {qaResult.warnings.map((warning) => (
-                    <div
-                      key={warning}
-                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-                    >
-                      {warning}
-                    </div>
                   ))}
                 </div>
-              ) : null}
-
-              {qaResult?.answer ? (
-                <div className="mt-4 rounded-md border border-line bg-surface p-3">
-                  <pre className="whitespace-pre-wrap text-sm leading-6 text-ink">{qaResult.answer}</pre>
-                </div>
-              ) : null}
-
-              {qaResult?.citations.length ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <h3 className="text-sm font-semibold">Citations</h3>
-                  {qaResult.citations.map((citation, index) => (
-                    <CitationCard key={`${citation.evidence_id}-${index}`} citation={citation} index={index} />
-                  ))}
-                </div>
-              ) : null}
-
-              {qaResult?.traces.length ? (
-                <TracePanel traces={qaResult.traces} />
-              ) : null}
-            </section>
-
-            <section className="rounded-md border border-line bg-white p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold">Review</h2>
-                  <div className="mt-1 text-sm text-muted">{reviewState}</div>
-                </div>
-                {displayedReview ? (
-                  <div className="rounded-md border border-line bg-surface px-3 py-2 text-right">
-                    <div className="text-xs uppercase text-muted">Risk</div>
-                    <div className="text-sm font-semibold">{displayedReview.risk_level ?? "-"}</div>
-                  </div>
-                ) : null}
               </div>
 
-              <form className="mt-4 grid gap-3" onSubmit={handleReview}>
-                <div className="inline-grid w-full grid-cols-3 rounded-md border border-line bg-surface p-1 sm:w-fit">
-                  <button
-                    className={`min-h-9 rounded px-3 text-sm font-medium ${
-                      reviewMode === "diff" ? "bg-white text-ink shadow-sm" : "text-muted"
-                    }`}
-                    disabled={reviewState === "reviewing"}
-                    onClick={() => {
-                      setReviewMode("diff");
-                      setReviewError(null);
-                    }}
-                    type="button"
-                  >
-                    Diff
-                  </button>
-                  <button
-                    className={`min-h-9 rounded px-3 text-sm font-medium ${
-                      reviewMode === "multi-agent"
-                        ? "bg-white text-ink shadow-sm"
-                        : "text-muted"
-                    }`}
-                    disabled={reviewState === "reviewing"}
-                    onClick={() => {
-                      setReviewMode("multi-agent");
-                      setReviewError(null);
-                    }}
-                    type="button"
-                  >
-                    Multi-Agent
-                  </button>
-                  <button
-                    className={`min-h-9 rounded px-3 text-sm font-medium ${
-                      reviewMode === "change-request"
-                        ? "bg-white text-ink shadow-sm"
-                        : "text-muted"
-                    }`}
-                    disabled={reviewState === "reviewing"}
-                    onClick={() => {
-                      setReviewMode("change-request");
-                      setReviewError(null);
-                    }}
-                    type="button"
-                  >
-                    PR/MR URL
-                  </button>
-                </div>
-
-                {reviewMode === "diff" || reviewMode === "multi-agent" ? (
-                  <textarea
-                    className="min-h-44 rounded-md border border-line bg-white px-3 py-2 font-mono text-xs leading-5 outline-none focus:border-ink disabled:bg-surface"
-                    disabled={!selectedRepository || reviewState === "reviewing"}
-                    placeholder="diff --git a/app.py b/app.py"
-                    value={diffText}
-                    onChange={(event) => setDiffText(event.target.value)}
-                  />
-                ) : (
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={!selectedRepository || reviewState === "reviewing"}
-                    placeholder="https://github.com/owner/repo/pull/123"
-                    value={changeRequestUrl}
-                    onChange={(event) => setChangeRequestUrl(event.target.value)}
-                  />
-                )}
-                <div className="grid gap-3 md:grid-cols-[120px_1fr_auto] md:items-center">
-                  <input
-                    className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                    disabled={reviewState === "reviewing"}
-                    min={1}
-                    max={50}
-                    type="number"
-                    value={reviewTopK}
-                    onChange={(event) => setReviewTopK(Number(event.target.value))}
-                  />
-                  <div className="flex flex-wrap gap-3 text-sm text-muted">
-                    <Toggle label="BM25" checked={reviewUseBm25} onChange={setReviewUseBm25} />
-                    <Toggle label="Vector" checked={reviewUseVector} onChange={setReviewUseVector} />
-                    <Toggle label="Graph" checked={reviewUseGraph} onChange={setReviewUseGraph} />
-                    <Toggle
-                      label="Static check"
-                      checked={reviewRunStaticCheck}
-                      onChange={setReviewRunStaticCheck}
-                    />
-                  </div>
-                  <button
-                    className="min-h-10 rounded-md bg-ink px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
-                    disabled={
-                      !selectedRepository ||
-                      selectedRepository.status !== "ready" ||
-                      reviewState === "reviewing"
-                    }
-                    type="submit"
-                  >
-                    {reviewState === "reviewing"
-                      ? "Reviewing"
-                      : reviewMode === "change-request"
-                        ? "Run PR/MR Review"
-                        : reviewMode === "multi-agent"
-                          ? "Run Multi-Agent Review"
-                          : "Review"}
-                  </button>
-                </div>
-              </form>
-
-              {reviewError ? (
-                <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  {reviewError}
-                </div>
-              ) : null}
-
-              {changeRequestMetadata ? (
-                <ChangeRequestMetadataPanel metadata={changeRequestMetadata} />
-              ) : null}
-
-              {multiAgentResult ? <MultiAgentTracePanel result={multiAgentResult} /> : null}
-
-              {displayedReview?.summary ? (
-                <div className="mt-4 rounded-md border border-line bg-surface p-3 text-sm leading-6">
-                  {displayedReview.summary}
-                </div>
-              ) : null}
-
-              {displayedReview?.risks.length ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <h3 className="text-sm font-semibold">Risks</h3>
-                  {displayedReview.risks.map((risk, index) => (
-                    <ReviewRiskCard key={`${risk.title ?? "risk"}-${index}`} risk={risk} />
-                  ))}
-                </div>
-              ) : null}
-
-              {displayedReview?.suggested_tests.length ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <h3 className="text-sm font-semibold">Suggested Tests</h3>
-                  {displayedReview.suggested_tests.map((test, index) => (
-                    <SuggestedTestCard key={`${test.target ?? "test"}-${index}`} test={test} />
-                  ))}
-                </div>
-              ) : null}
-
-              {displayedReview?.citations.length ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <h3 className="text-sm font-semibold">Review Citations</h3>
-                  {displayedReview.citations.map((citation, index) => (
-                    <ReviewCitationCard
-                      key={`${citation.evidence_id ?? "citation"}-${index}`}
-                      citation={citation}
-                      index={index}
-                    />
-                  ))}
-                </div>
-              ) : null}
-
-              {displayedReview?.markdown ? (
-                <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-surface p-3 text-xs leading-5 text-ink">
-                  {displayedReview.markdown}
-                </pre>
-              ) : null}
-
-              {reviewResult?.tool_calls.length ? (
-                <ToolCallsPanel toolCalls={reviewResult.tool_calls} />
-              ) : null}
-
-              {reviewResult?.traces.length ? (
-                <TracePanel traces={reviewResult.traces} />
-              ) : null}
-            </section>
-
-            <section className="rounded-md border border-line bg-white p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold">Evidence</h2>
-                  <div className="mt-1 text-sm text-muted">{retrievalState}</div>
-                </div>
-                {retrievalResult ? (
-                  <div className="grid grid-cols-3 gap-2 text-right text-xs text-muted sm:grid-cols-5">
-                    <DebugMetric label="BM25" value={retrievalResult.debug.bm25_count} />
-                    <DebugMetric label="Vector" value={retrievalResult.debug.vector_count} />
-                    <DebugMetric label="Graph" value={retrievalResult.debug.graph_count} />
-                    <DebugMetric label="Merged" value={retrievalResult.debug.merged_count} />
-                    <DebugMetric label="Evidence" value={retrievalResult.debug.evidence_count} />
-                  </div>
-                ) : null}
-              </div>
-
-              <form className="mt-4 grid gap-3 lg:grid-cols-[1fr_120px_auto]" onSubmit={handleRetrieve}>
-                <input
-                  className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                  disabled={!selectedRepository || retrievalState === "searching"}
-                  placeholder="repository import flow"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                <input
-                  className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
-                  disabled={retrievalState === "searching"}
-                  min={1}
-                  max={50}
-                  type="number"
-                  value={topK}
-                  onChange={(event) => setTopK(Number(event.target.value))}
-                />
-                <button
-                  className="min-h-10 rounded-md bg-ink px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
-                  disabled={
-                    !selectedRepository ||
-                    selectedRepository.status !== "ready" ||
-                    retrievalState === "searching"
-                  }
-                  type="submit"
-                >
-                  {retrievalState === "searching" ? "Searching" : "Search"}
-                </button>
-              </form>
-
-              <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted">
-                <Toggle label="BM25" checked={useBm25} onChange={setUseBm25} />
-                <Toggle label="Vector" checked={useVector} onChange={setUseVector} />
-                <Toggle label="Graph" checked={useGraph} onChange={setUseGraph} />
-              </div>
-
-              {retrievalError ? (
-                <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                  {retrievalError}
-                </div>
-              ) : null}
-
-              {retrievalResult?.debug.vector_disabled_reason ? (
-                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  {retrievalResult.debug.vector_disabled_reason}
-                </div>
-              ) : null}
-
-              <div className="mt-4 flex flex-col gap-3">
-                {retrievalState === "empty" ? (
-                  <div className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
-                    No evidence
-                  </div>
-                ) : null}
-                {retrievalResult?.evidences.map((evidence) => (
-                  <EvidenceCard key={evidence.evidence_id} evidence={evidence} />
-                ))}
-              </div>
+              <div className="mt-4">{renderActiveTab()}</div>
             </section>
           </section>
         </section>
       </section>
     </main>
+  );
+
+  function activeTabStatus(): string {
+    const statusMap: Record<WorkbenchTab, AsyncState> = {
+      search: retrievalState,
+      ask: qaState,
+      review: reviewState,
+      mcp: mcpState,
+      eval: evaluationState
+    };
+    return statusMap[activeTab];
+  }
+
+  function renderActiveTab() {
+    if (activeTab === "search") {
+      return renderSearchPanel();
+    }
+    if (activeTab === "ask") {
+      return renderAskPanel();
+    }
+    if (activeTab === "review") {
+      return renderReviewPanel();
+    }
+    if (activeTab === "mcp") {
+      return renderMcpPanel();
+    }
+    return renderEvaluationPanel();
+  }
+
+  function renderSharedRetrievalControls() {
+    return (
+      <div className="flex flex-wrap gap-3 text-sm text-muted">
+        <Toggle label="BM25" checked={useBm25} onChange={setUseBm25} />
+        <Toggle label="Vector" checked={useVector} onChange={setUseVector} />
+        <Toggle label="Graph" checked={useGraph} onChange={setUseGraph} />
+      </div>
+    );
+  }
+
+  function renderSearchPanel() {
+    return (
+      <section>
+        <form className="grid gap-3 lg:grid-cols-[1fr_120px_auto]" onSubmit={handleRetrieve}>
+          <input
+            className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
+            disabled={!selectedRepository || retrievalState === "running"}
+            placeholder="RepositoryApplicationService"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <NumberInput disabled={retrievalState === "running"} value={topK} onChange={setTopK} />
+          <RunButton disabled={!isReady || retrievalState === "running"}>
+            {retrievalState === "running" ? "Searching" : "Search"}
+          </RunButton>
+        </form>
+
+        <div className="mt-3">{renderSharedRetrievalControls()}</div>
+        {retrievalError ? <Alert tone="red" message={retrievalError} /> : null}
+        {retrievalResult?.debug.vector_disabled_reason ? (
+          <Alert tone="amber" message={retrievalResult.debug.vector_disabled_reason} />
+        ) : null}
+
+        {retrievalResult ? <RetrievalDebug result={retrievalResult} /> : null}
+        <EvidenceList evidences={retrievalResult?.evidences ?? []} empty={retrievalState === "empty"} />
+      </section>
+    );
+  }
+
+  function renderAskPanel() {
+    return (
+      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <form className="flex flex-col gap-3" onSubmit={handleAsk}>
+          <textarea
+            className="min-h-36 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
+            disabled={!selectedRepository || qaState === "running"}
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {renderSharedRetrievalControls()}
+            <RunButton disabled={!isReady || qaState === "running"}>
+              {qaState === "running" ? "Asking" : "Ask"}
+            </RunButton>
+          </div>
+          {qaError ? <Alert tone="red" message={qaError} /> : null}
+        </form>
+
+        <section className="min-w-0">
+          {qaResult ? (
+            <div className="flex flex-col gap-3">
+              <ResultHeader title="Answer" status={qaResult.status} detail={confidenceText(qaResult)} />
+              <div className="rounded-md border border-line bg-surface p-3 text-sm leading-6">
+                {qaResult.answer ?? "-"}
+              </div>
+              <CitationList citations={qaResult.citations} />
+              <TraceList traces={qaResult.traces} />
+            </div>
+          ) : (
+            <EmptyState label="No answer yet" />
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  function renderReviewPanel() {
+    return (
+      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <form className="flex flex-col gap-3" onSubmit={handleReview}>
+          <textarea
+            className="min-h-80 rounded-md border border-line bg-white px-3 py-2 font-mono text-xs leading-5 outline-none focus:border-ink disabled:bg-surface"
+            disabled={!selectedRepository || reviewState === "running"}
+            value={diffText}
+            onChange={(event) => setDiffText(event.target.value)}
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {renderSharedRetrievalControls()}
+            <RunButton disabled={!isReady || reviewState === "running"}>
+              {reviewState === "running" ? "Reviewing" : "Review"}
+            </RunButton>
+          </div>
+          {reviewError ? <Alert tone="red" message={reviewError} /> : null}
+        </form>
+
+        <section className="min-w-0">
+          {reviewResult ? (
+            <div className="flex flex-col gap-3">
+              <ResultHeader
+                title="Review"
+                status={reviewResult.status}
+                detail={`risk ${reviewResult.risk_level ?? "-"}`}
+              />
+              <div className="rounded-md border border-line bg-surface p-3 text-sm leading-6">
+                {reviewResult.summary ?? "-"}
+              </div>
+              <RiskList risks={reviewResult.risks} />
+              <SuggestedTestList tests={reviewResult.suggested_tests} />
+              <ReviewCitationList citations={reviewResult.citations} />
+              <ToolCallList calls={reviewResult.tool_calls} />
+              <TraceList traces={reviewResult.traces} />
+            </div>
+          ) : (
+            <EmptyState label="No review yet" />
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  function renderMcpPanel() {
+    return (
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-md border border-line px-3 py-2 text-sm font-medium text-ink"
+              onClick={() => void loadMcpData()}
+              type="button"
+            >
+              Refresh
+            </button>
+            <RunButton disabled={!isReady || mcpState === "running"} onClick={() => void handleMcpSearch()}>
+              {mcpState === "running" ? "Calling" : "Call Search Tool"}
+            </RunButton>
+          </div>
+          {mcpError ? <Alert tone="red" message={mcpError} /> : null}
+          <ToolRegistry tools={mcpTools} />
+          {mcpCallResult ? (
+            <div className="rounded-md border border-line bg-surface p-3 text-sm">
+              <div className="font-semibold">{mcpCallResult.tool_name}</div>
+              <div className="mt-1 text-muted">
+                {mcpCallResult.status} / {mcpCallResult.permission_decision}
+              </div>
+              {mcpCallResult.error_message ? (
+                <div className="mt-2 text-red-700">{mcpCallResult.error_message}</div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <AuditList audits={mcpAudits} />
+      </section>
+    );
+  }
+
+  function renderEvaluationPanel() {
+    return (
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <form className="flex flex-col gap-3" onSubmit={handleEvaluation}>
+          <input
+            className="rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+            value={evaluationName}
+            onChange={(event) => setEvaluationName(event.target.value)}
+          />
+          <input
+            className="rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+            value={evaluationDataset}
+            onChange={(event) => setEvaluationDataset(event.target.value)}
+          />
+          <select
+            className="rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+            value={evaluationStrategy}
+            onChange={(event) => setEvaluationStrategy(event.target.value as EvaluationStrategy)}
+          >
+            <option value="all">all</option>
+            <option value="vector_only">vector_only</option>
+            <option value="bm25_vector">bm25_vector</option>
+            <option value="bm25_vector_graph">bm25_vector_graph</option>
+          </select>
+          <RunButton disabled={!isReady || evaluationState === "running"}>
+            {evaluationState === "running" ? "Running" : "Run Evaluation"}
+          </RunButton>
+          {evaluationError ? <Alert tone="red" message={evaluationError} /> : null}
+        </form>
+
+        <div className="flex min-w-0 flex-col gap-3">
+          {evaluationResult ? <EvaluationResultPanel run={evaluationResult} /> : <EmptyState label="No evaluation yet" />}
+          <EvaluationRunList runs={evaluationRuns} />
+        </div>
+      </section>
+    );
+  }
+}
+
+function RepositoryImportForm({
+  branch,
+  isSubmitting,
+  selectedRepository,
+  source,
+  onBranchChange,
+  onSourceChange,
+  onSubmit
+}: {
+  branch: string;
+  isSubmitting: boolean;
+  selectedRepository: RepositoryDetail | null;
+  source: string;
+  onBranchChange: (value: string) => void;
+  onSourceChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="rounded-md border border-line bg-white p-4" onSubmit={onSubmit}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Repository</h2>
+        <StatusBadge status={selectedRepository?.status ?? "pending"} />
+      </div>
+
+      <label className="mt-4 block text-xs font-medium uppercase text-muted" htmlFor="source">
+        Local path
+      </label>
+      <input
+        id="source"
+        className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+        placeholder="F:\\Desktop\\agent\\RepoLens\\backend-java"
+        value={source}
+        onChange={(event) => onSourceChange(event.target.value)}
+      />
+
+      <label className="mt-3 block text-xs font-medium uppercase text-muted" htmlFor="branch">
+        Branch
+      </label>
+      <input
+        id="branch"
+        className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+        placeholder="main"
+        value={branch}
+        onChange={(event) => onBranchChange(event.target.value)}
+      />
+
+      <button
+        className="mt-4 w-full rounded-md bg-ink px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
+        disabled={isSubmitting}
+        type="submit"
+      >
+        {isSubmitting ? "Importing" : "Import"}
+      </button>
+    </form>
+  );
+}
+
+function RepositoryOverview({
+  metrics,
+  repository,
+  status
+}: {
+  metrics: Array<{ key: string; label: string; value: number }>;
+  repository: RepositoryDetail | null;
+  status: RepositoryStatusResponse | null;
+}) {
+  return (
+    <>
+      <section className="rounded-md border border-line bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold">{repository?.name ?? "No repository selected"}</h2>
+            <p className="mt-1 break-all text-sm text-muted">{repository?.local_path ?? "-"}</p>
+          </div>
+          <StatusBadge status={repository?.status ?? "pending"} />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {metrics.map((metric) => (
+            <Metric key={metric.key} label={metric.label} value={metric.value} />
+          ))}
+        </div>
+      </section>
+
+      <section className="grid min-w-0 gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <section className="rounded-md border border-line bg-white p-4">
+          <h2 className="text-base font-semibold">Languages</h2>
+          <div className="mt-4 flex flex-col gap-3">
+            {repository && Object.keys(repository.language_summary).length > 0 ? (
+              Object.entries(repository.language_summary).map(([language, count]) => (
+                <LanguageRow key={language} count={count} language={language} />
+              ))
+            ) : (
+              <EmptyState label="No language data" />
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-md border border-line bg-white p-4">
+          <h2 className="text-base font-semibold">Index Status</h2>
+          <div className="mt-4 grid gap-x-6 gap-y-3 md:grid-cols-2">
+            <InfoItem label="Current step" value={status?.progress.current_step ?? "-"} />
+            <InfoItem label="Source type" value={repository?.source_type ?? "-"} />
+            <InfoItem label="Branch" value={repository?.branch ?? "-"} />
+            <InfoItem label="Commit" value={repository?.commit_hash?.slice(0, 12) ?? "-"} />
+            <InfoItem label="Updated" value={formatDate(repository?.updated_at)} />
+            <InfoItem label="Indexed" value={formatDate(repository?.indexed_at)} />
+          </div>
+          {repository?.error_message || status?.error_message ? (
+            <Alert tone="red" message={repository?.error_message ?? status?.error_message ?? ""} />
+          ) : null}
+        </section>
+      </section>
+    </>
+  );
+}
+
+function RepositoryListItem({
+  active,
+  repository,
+  onSelect
+}: {
+  active: boolean;
+  repository: RepositorySummary;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      className={`rounded-md border px-3 py-3 text-left ${
+        active ? "border-ink bg-surface" : "border-line bg-white"
+      }`}
+      onClick={onSelect}
+      type="button"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 truncate text-sm font-medium">{repository.name}</div>
+        <StatusBadge status={repository.status} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+        <span>{repository.file_count} files</span>
+        <span>{repository.chunk_count} chunks</span>
+        <span>{repository.relation_count} relations</span>
+      </div>
+    </button>
   );
 }
 
@@ -1212,65 +878,36 @@ function StatusBadge({ status }: { status: RepositoryStatus }) {
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : status === "failed"
         ? "border-red-200 bg-red-50 text-red-700"
-        : "border-blue-200 bg-blue-50 text-blue-700";
+        : status === "indexing"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-blue-200 bg-blue-50 text-blue-700";
 
-  return (
-    <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-medium ${className}`}>
-      {status}
-    </span>
-  );
-}
-
-function evaluationRepositoryKeys(value: string): string[] {
-  return value
-    .split(/[,\s]+/)
-    .map((key) => key.trim())
-    .filter(Boolean);
-}
-
-function buildEvaluationRepositoryMap(
-  value: string,
-  repositories: RepositorySummary[],
-  selectedRepository: RepositoryDetail | null
-): Record<string, string> {
-  const keys = evaluationRepositoryKeys(value);
-  const map: Record<string, string> = {};
-  for (const key of keys) {
-    const matchingRepository = repositories.find(
-      (repository) => repository.name === key && repository.status === "ready"
-    );
-    if (matchingRepository) {
-      map[key] = matchingRepository.id;
-    } else if (keys.length === 1 && selectedRepository?.status === "ready") {
-      map[key] = selectedRepository.id;
-    }
-  }
-  return map;
+  return <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-medium ${className}`}>{status}</span>;
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border border-line bg-surface p-3">
       <div className="text-xs uppercase text-muted">{label}</div>
-      <div className="mt-2 text-xl font-semibold">{value}</div>
+      <div className="mt-2 text-xl font-semibold">{formatNumber(value)}</div>
     </div>
   );
 }
 
 function LanguageRow({ language, count }: { language: string; count: number }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2">
-      <div className="text-sm font-medium">{language}</div>
-      <div className="text-sm text-muted">{count}</div>
+    <div className="flex items-center justify-between gap-3 border-b border-line pb-2 last:border-b-0 last:pb-0">
+      <span className="text-sm font-medium">{language}</span>
+      <span className="text-sm text-muted">{count}</span>
     </div>
   );
 }
 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-line bg-surface p-3">
+    <div className="min-w-0 border-b border-line pb-2">
       <div className="text-xs uppercase text-muted">{label}</div>
-      <div className="mt-2 break-all text-sm font-medium">{value}</div>
+      <div className="mt-1 truncate text-sm font-medium">{value}</div>
     </div>
   );
 }
@@ -1292,16 +929,85 @@ function Toggle({
   );
 }
 
+function NumberInput({
+  disabled,
+  value,
+  onChange
+}: {
+  disabled?: boolean;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <input
+      className="min-h-10 rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
+      disabled={disabled}
+      max={20}
+      min={1}
+      type="number"
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+    />
+  );
+}
+
+function RunButton({
+  children,
+  disabled,
+  onClick
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      className="min-h-10 rounded-md bg-ink px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-muted"
+      disabled={disabled}
+      onClick={onClick}
+      type={onClick ? "button" : "submit"}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RetrievalDebug({ result }: { result: RetrievalResponse }) {
+  return (
+    <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-muted sm:grid-cols-5">
+      <DebugMetric label="BM25" value={result.debug.bm25_count} />
+      <DebugMetric label="Vector" value={result.debug.vector_count} />
+      <DebugMetric label="Graph" value={result.debug.graph_count} />
+      <DebugMetric label="Merged" value={result.debug.merged_count} />
+      <DebugMetric label="Evidence" value={result.debug.evidence_count} />
+    </div>
+  );
+}
+
 function DebugMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div>
+    <div className="rounded-md border border-line bg-surface p-2 text-right">
       <div className="uppercase">{label}</div>
       <div className="text-sm font-semibold text-ink">{value}</div>
     </div>
   );
 }
 
+function EvidenceList({ evidences, empty }: { evidences: EvidenceItem[]; empty: boolean }) {
+  return (
+    <div className="mt-4 flex flex-col gap-3">
+      {empty ? <EmptyState label="No evidence" /> : null}
+      {evidences.map((evidence) => (
+        <EvidenceCard key={evidence.evidence_id} evidence={evidence} />
+      ))}
+    </div>
+  );
+}
+
 function EvidenceCard({ evidence }: { evidence: EvidenceItem }) {
+  const route = routePath(evidence.metadata);
+  const annotations = stringListValue(evidence.metadata.annotations);
+
   return (
     <article className="rounded-md border border-line bg-surface p-3">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -1309,838 +1015,335 @@ function EvidenceCard({ evidence }: { evidence: EvidenceItem }) {
           <div className="break-all text-sm font-semibold">
             {evidence.file_path}:{evidence.start_line}-{evidence.end_line}
           </div>
-          <div className="mt-1 text-sm text-muted">{evidence.symbol_name}</div>
+          <div className="mt-1 break-words text-sm text-muted">{evidence.symbol_name}</div>
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end">
+          <SourcePill value={evidence.source} />
           <SourcePill value={formatScore(evidence.score)} />
-          {evidence.sources.map((source) => (
-            <SourcePill key={source} value={source} />
-          ))}
+          <SourcePill value={`BM25 ${formatScore(evidence.bm25_score)}`} />
         </div>
       </div>
-      <pre className="mt-3 max-h-72 overflow-auto rounded-md border border-line bg-white p-3 text-xs leading-5 text-ink">
+
+      {route || annotations.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {route ? <SourcePill value={route} /> : null}
+          {annotations.map((annotation) => (
+            <SourcePill key={annotation} value={`@${annotation}`} />
+          ))}
+        </div>
+      ) : null}
+
+      <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-white p-3 text-xs leading-5 text-ink">
         {evidence.snippet}
       </pre>
     </article>
   );
 }
 
-function CitationCard({ citation, index }: { citation: QACitation; index: number }) {
+function ResultHeader({ title, status, detail }: { title: string; status: string; detail?: string }) {
   return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-all text-sm font-semibold">
-            [{index + 1}] {citation.file_path}:{citation.start_line}-{citation.end_line}
-          </div>
-          <div className="mt-1 text-sm text-muted">{citation.symbol_name}</div>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={formatScore(citation.score)} />
-          {citation.sources.map((source) => (
-            <SourcePill key={source} value={source} />
-          ))}
-        </div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <div className="text-xs text-muted">
+        {status}
+        {detail ? ` / ${detail}` : ""}
       </div>
-      <pre className="mt-3 max-h-56 overflow-auto rounded-md border border-line bg-white p-3 text-xs leading-5 text-ink">
-        {citation.snippet}
-      </pre>
-    </article>
+    </div>
   );
 }
 
-function ChangeRequestMetadataPanel({ metadata }: { metadata: ChangeRequestMetadata }) {
+function CitationList({ citations }: { citations: QACitation[] }) {
+  if (!citations.length) {
+    return <EmptyState label="No citations" />;
+  }
   return (
-    <section className="mt-4 rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{metadata.title}</div>
-          <div className="mt-1 break-all text-sm text-muted">
-            {metadata.owner}/{metadata.repo} #{metadata.number}
+    <div className="flex flex-col gap-2">
+      {citations.map((citation) => (
+        <div key={citation.evidence_id} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="break-all font-medium">
+            {citation.file_path}:{citation.start_line}-{citation.end_line}
           </div>
+          <div className="mt-1 text-muted">{citation.symbol_name}</div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={metadata.platform} />
-          <SourcePill value={metadata.change_type} />
-          <SourcePill value={metadata.state ?? "-"} />
-        </div>
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InfoItem label="Source branch" value={metadata.source_branch ?? "-"} />
-        <InfoItem label="Target branch" value={metadata.target_branch ?? "-"} />
-        <InfoItem label="Author" value={metadata.author ?? "-"} />
-        <InfoItem label="Changed files" value={String(metadata.changed_file_count)} />
-        <InfoItem label="Additions" value={`+${metadata.addition_count}`} />
-        <InfoItem label="Deletions" value={`-${metadata.deletion_count}`} />
-        <InfoItem label="Commits" value={String(metadata.commit_count)} />
-        <InfoItem label="Updated" value={formatDate(metadata.updated_at)} />
-      </div>
-    </section>
+      ))}
+    </div>
   );
 }
 
-function MultiAgentTracePanel({ result }: { result: MultiAgentReviewResponse }) {
-  const sourceAgents = stringListValue(result.session.final_report?.source_agents);
-
+function TraceList({ traces }: { traces: AgentTrace[] }) {
+  if (!traces.length) {
+    return <EmptyState label="No trace" />;
+  }
   return (
-    <section className="mt-4 rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">Multi-Agent Session</div>
-          <div className="mt-1 break-all text-sm text-muted">{result.session.id}</div>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={result.session.status} />
-          <SourcePill value={`${result.assignments.length} assignments`} />
-          <SourcePill value={`${result.messages.length} messages`} />
-          <SourcePill value={`${result.dissent.length} dissent`} />
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InfoItem label="Mode" value={result.session.mode} />
-        <InfoItem label="Round limit" value={String(result.session.round_limit)} />
-        <InfoItem label="Assignment limit" value={String(result.session.assignment_limit)} />
-        <InfoItem label="Token estimate" value={String(result.comparison.token_estimate ?? 0)} />
-      </div>
-
-      {sourceAgents.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {sourceAgents.map((agent) => (
-            <SourcePill key={agent} value={agent} />
-          ))}
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Assignments</h3>
-          <div className="mt-3 flex flex-col gap-3">
-            {result.assignments.map((assignment) => (
-              <AgentAssignmentCard key={assignment.id} assignment={assignment} />
-            ))}
+    <div className="flex flex-col gap-2">
+      {traces.map((trace) => (
+        <div key={trace.id} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium">{trace.step_name}</span>
+            <span className="text-xs text-muted">{trace.status}</span>
           </div>
+          <div className="mt-1 text-muted">{trace.output_summary ?? trace.input_summary}</div>
         </div>
+      ))}
+    </div>
+  );
+}
 
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Messages</h3>
-          <div className="mt-3 flex max-h-[34rem] flex-col gap-3 overflow-auto pr-1">
-            {result.messages.map((message) => (
-              <AgentMessageCard key={message.id} message={message} />
-            ))}
+function RiskList({ risks }: { risks: ReviewRisk[] }) {
+  if (!risks.length) {
+    return <EmptyState label="No risks" />;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {risks.map((risk, index) => (
+        <div key={`${risk.title ?? "risk"}-${index}`} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="font-medium">
+            [{stringValue(risk.severity)}] {stringValue(risk.title)}
           </div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <div className="rounded-md border border-line bg-white p-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="text-sm font-semibold">Arbiter</div>
-              <div className="mt-1 text-sm text-muted">
-                {stringValue(result.arbiter_decision.reason) || "-"}
-              </div>
+          <div className="mt-1 text-muted">{stringValue(risk.reason)}</div>
+          {risk.location ? (
+            <div className="mt-1 break-all text-xs text-muted">
+              {risk.location.file_path}:{risk.location.start_line}-{risk.location.end_line}
             </div>
-            <div className="flex flex-wrap gap-2 md:justify-end">
-              <SourcePill value={`${numberValue(result.arbiter_decision.accepted)} accepted`} />
-              <SourcePill value={`${numberValue(result.arbiter_decision.rejected)} rejected`} />
-              <SourcePill value={`${numberValue(result.arbiter_decision.downgraded)} downgraded`} />
-            </div>
-          </div>
+          ) : null}
         </div>
-
-        <div className="rounded-md border border-line bg-white p-3">
-          <div className="text-sm font-semibold">Comparison</div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <TraceText label="Baseline" value={String(result.comparison.baseline ?? "-")} />
-            <TraceText label="Variant" value={String(result.comparison.variant ?? "-")} />
-            <TraceText
-              label="Messages"
-              value={String(result.comparison.message_count ?? result.messages.length)}
-            />
-            <TraceText
-              label="Assignments"
-              value={String(result.comparison.assignment_count ?? result.assignments.length)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {result.dissent.length ? (
-        <div className="mt-4">
-          <h3 className="text-sm font-semibold">Dissent</h3>
-          <div className="mt-3 flex flex-col gap-3">
-            {result.dissent.map((item, index) => (
-              <div key={`dissent-${index}`} className="rounded-md border border-line bg-white p-3">
-                <div className="flex flex-wrap gap-2">
-                  <SourcePill value={String(item.source_agent ?? "agent")} />
-                  <SourcePill value={String(item.type ?? "dissent")} />
-                </div>
-                <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-ink">
-                  {prettyJson(item)}
-                </pre>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </section>
+      ))}
+    </div>
   );
 }
 
-function AgentAssignmentCard({ assignment }: { assignment: AgentAssignmentResponse }) {
+function SuggestedTestList({ tests }: { tests: ReviewSuggestedTest[] }) {
+  if (!tests.length) {
+    return <EmptyState label="No suggested tests" />;
+  }
   return (
-    <article className="rounded-md border border-line bg-white p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{assignment.agent_name}</div>
-          <div className="mt-1 break-all text-sm text-muted">{assignment.role}</div>
+    <div className="flex flex-col gap-2">
+      {tests.map((test, index) => (
+        <div key={`${test.target ?? "test"}-${index}`} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="font-medium">{stringValue(test.test_type)} / {stringValue(test.target)}</div>
+          <div className="mt-1 text-muted">{stringValue(test.reason)}</div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={assignment.status} />
-          <SourcePill value={`round ${assignment.round_index}`} />
-          <SourcePill value={`${assignment.confidence}%`} />
-          <SourcePill value={`${assignment.evidence_ids.length} evidence`} />
-          <SourcePill value={`${assignment.token_estimate} tokens`} />
-        </div>
-      </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <TraceText label="Latency" value={`${assignment.latency_ms ?? 0} ms`} />
-        <TraceText label="Completed" value={formatDate(assignment.completed_at)} />
-      </div>
-      {assignment.dissent ? (
-        <pre className="mt-3 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-surface p-3 text-xs leading-5 text-ink">
-          {prettyJson(assignment.dissent)}
-        </pre>
-      ) : null}
-    </article>
+      ))}
+    </div>
   );
 }
 
-function AgentMessageCard({ message }: { message: AgentMessageResponse }) {
+function ReviewCitationList({ citations }: { citations: ReviewCitation[] }) {
+  if (!citations.length) {
+    return <EmptyState label="No review citations" />;
+  }
   return (
-    <article className="rounded-md border border-line bg-white p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">
-            {message.sender} to {message.recipient}
+    <div className="flex flex-col gap-2">
+      {citations.slice(0, 5).map((citation, index) => (
+        <div key={`${citation.evidence_id ?? "citation"}-${index}`} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="break-all font-medium">
+            {stringValue(citation.file_path)}:{numberValue(citation.start_line)}-{numberValue(citation.end_line)}
           </div>
-          <div className="mt-1 text-sm text-muted">{message.message_type}</div>
+          <div className="mt-1 text-muted">{stringValue(citation.symbol_name)}</div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={`round ${message.round_index}`} />
-          <SourcePill value={`${message.confidence}%`} />
-          <SourcePill value={`${message.evidence_ids.length} evidence`} />
-          {message.requires_arbitration ? <SourcePill value="arbitration" /> : null}
-        </div>
-      </div>
-      <div className="mt-3 text-sm leading-6">{message.content}</div>
-      {message.claims.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {message.claims.slice(0, 6).map((claim) => (
-            <SourcePill key={claim} value={claim} />
-          ))}
-        </div>
-      ) : null}
-    </article>
+      ))}
+    </div>
   );
 }
 
-function ReviewRiskCard({ risk }: { risk: ReviewRisk }) {
-  const location = risk.location;
+function ToolCallList({ calls }: { calls: ReviewToolCall[] }) {
+  if (!calls.length) {
+    return <EmptyState label="No tool calls" />;
+  }
   return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{risk.title ?? "Review risk"}</div>
-          <div className="mt-1 break-all text-sm text-muted">
-            {location
-              ? `${location.file_path}:${location.start_line}-${location.end_line}`
-              : "-"}
+    <div className="flex flex-col gap-2">
+      {calls.map((call) => (
+        <div key={call.id} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium">{call.tool_name}</span>
+            <span className="text-xs text-muted">{call.status} / {call.permission_decision}</span>
           </div>
+          <div className="mt-1 text-muted">{call.output_summary ?? call.input_summary}</div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={risk.severity ?? "unknown"} />
-          <SourcePill value={`${risk.evidence_ids?.length ?? 0} evidence`} />
-        </div>
-      </div>
-      {risk.reason ? <div className="mt-3 text-sm leading-6">{risk.reason}</div> : null}
-      {risk.suggestion ? (
-        <div className="mt-3 rounded-md border border-line bg-white p-3 text-sm leading-6">
-          {risk.suggestion}
-        </div>
-      ) : null}
-      {risk.impacted_symbols?.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {risk.impacted_symbols.map((symbol) => (
-            <SourcePill key={symbol} value={symbol} />
-          ))}
-        </div>
-      ) : null}
-    </article>
+      ))}
+    </div>
   );
 }
 
-function SuggestedTestCard({ test }: { test: ReviewSuggestedTest }) {
+function ToolRegistry({ tools }: { tools: McpToolInfo[] }) {
+  if (!tools.length) {
+    return <EmptyState label="No tools" />;
+  }
   return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{test.target ?? "Focused test"}</div>
-          <div className="mt-1 break-all text-sm text-muted">{test.file_path ?? "-"}</div>
-        </div>
-        <SourcePill value={test.test_type ?? "test"} />
-      </div>
-      {test.reason ? <div className="mt-3 text-sm leading-6">{test.reason}</div> : null}
-      {test.related_risk_titles?.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {test.related_risk_titles.map((title) => (
-            <SourcePill key={title} value={title} />
-          ))}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function ReviewCitationCard({
-  citation,
-  index
-}: {
-  citation: ReviewCitation;
-  index: number;
-}) {
-  return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-all text-sm font-semibold">
-            [{index + 1}] {citation.file_path ?? "-"}:{citation.start_line ?? 0}-
-            {citation.end_line ?? 0}
+    <div className="flex flex-col gap-2">
+      {tools.map((tool) => (
+        <div key={tool.name} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium">{tool.name}</span>
+            <span className="text-xs text-muted">{tool.enabled ? "enabled" : "disabled"}</span>
           </div>
-          <div className="mt-1 text-sm text-muted">{citation.symbol_name ?? citation.evidence_id}</div>
+          <div className="mt-1 text-muted">{tool.description}</div>
+          <div className="mt-1 text-xs text-muted">{tool.permission_policy}</div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={formatOptionalScore(citation.score)} />
-          {(citation.sources ?? []).map((source) => (
-            <SourcePill key={source} value={source} />
-          ))}
-        </div>
-      </div>
-      {citation.snippet ? (
-        <pre className="mt-3 max-h-56 overflow-auto rounded-md border border-line bg-white p-3 text-xs leading-5 text-ink">
-          {citation.snippet}
-        </pre>
-      ) : null}
-    </article>
+      ))}
+    </div>
   );
 }
 
-function EvaluationMetricsTable({ metrics }: { metrics: EvaluationMetric[] }) {
+function AuditList({ audits }: { audits: McpToolCallAudit[] }) {
+  if (!audits.length) {
+    return <EmptyState label="No audit records" />;
+  }
   return (
-    <div className="mt-4 max-w-full overflow-x-auto rounded-md border border-line">
-      <table className="w-full min-w-[840px] border-collapse text-left text-sm">
-        <thead className="bg-surface text-xs uppercase text-muted">
-          <tr>
-            <th className="px-3 py-2">Strategy</th>
-            <th className="px-3 py-2">Samples</th>
-            <th className="px-3 py-2">Hit@5</th>
-            <th className="px-3 py-2">MRR</th>
-            <th className="px-3 py-2">Coverage</th>
-            <th className="px-3 py-2">Avg ms</th>
-            <th className="px-3 py-2">P95 ms</th>
-            <th className="px-3 py-2">Avg tokens</th>
-            <th className="px-3 py-2">Errors</th>
-          </tr>
-        </thead>
-        <tbody>
-          {metrics.map((metric) => (
-            <tr key={metric.strategy} className="border-t border-line">
-              <td className="px-3 py-2 font-medium">{metric.strategy}</td>
-              <td className="px-3 py-2">{metric.sample_count}</td>
-              <td className="px-3 py-2">{formatPercent(metric.hit_at_5)}</td>
-              <td className="px-3 py-2">{formatScore(metric.mrr)}</td>
-              <td className="px-3 py-2">{formatPercent(metric.citation_coverage)}</td>
-              <td className="px-3 py-2">{formatNumber(metric.avg_latency_ms)}</td>
-              <td className="px-3 py-2">{metric.p95_latency_ms}</td>
-              <td className="px-3 py-2">
-                {formatNumber(metric.avg_token_count)}
-                {metric.token_estimated ? " est" : ""}
-              </td>
-              <td className="px-3 py-2">{metric.error_count}</td>
+    <div className="flex max-h-[560px] flex-col gap-2 overflow-auto">
+      {audits.map((audit) => (
+        <div key={audit.id} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-medium">{audit.tool_name}</span>
+            <span className="text-xs text-muted">{audit.status} / {audit.permission_decision}</span>
+          </div>
+          <div className="mt-1 break-all text-xs text-muted">
+            in {audit.input_hash ?? "-"} / out {audit.output_hash ?? "-"}
+          </div>
+          <div className="mt-1 text-xs text-muted">{audit.latency_ms ?? 0} ms</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EvaluationResultPanel({ run }: { run: EvaluationRunResponse }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <ResultHeader title={run.name} status={run.status} detail={`${run.sample_count} samples`} />
+      <div className="overflow-auto rounded-md border border-line">
+        <table className="w-full min-w-[720px] border-collapse text-sm">
+          <thead className="bg-surface text-left text-xs uppercase text-muted">
+            <tr>
+              <th className="border-b border-line px-3 py-2">Strategy</th>
+              <th className="border-b border-line px-3 py-2">Hit@5</th>
+              <th className="border-b border-line px-3 py-2">MRR</th>
+              <th className="border-b border-line px-3 py-2">Coverage</th>
+              <th className="border-b border-line px-3 py-2">Avg latency</th>
+              <th className="border-b border-line px-3 py-2">Errors</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function EvaluationResultsTable({ results }: { results: EvaluationResult[] }) {
-  return (
-    <div className="mt-4 max-h-96 max-w-full overflow-auto rounded-md border border-line">
-      <table className="w-full min-w-[920px] border-collapse text-left text-sm">
-        <thead className="sticky top-0 bg-surface text-xs uppercase text-muted">
-          <tr>
-            <th className="px-3 py-2">Sample</th>
-            <th className="px-3 py-2">Type</th>
-            <th className="px-3 py-2">Strategy</th>
-            <th className="px-3 py-2">Hit</th>
-            <th className="px-3 py-2">MRR</th>
-            <th className="px-3 py-2">Coverage</th>
-            <th className="px-3 py-2">Latency</th>
-            <th className="px-3 py-2">Matched</th>
-            <th className="px-3 py-2">Error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((result) => (
-            <tr key={result.id} className="border-t border-line">
-              <td className="px-3 py-2 font-medium">{result.sample_id}</td>
-              <td className="px-3 py-2">{result.sample_type}</td>
-              <td className="px-3 py-2">{result.strategy}</td>
-              <td className="px-3 py-2">{result.hit_at_5 ? "yes" : "no"}</td>
-              <td className="px-3 py-2">{formatScore(result.mrr)}</td>
-              <td className="px-3 py-2">{formatPercent(result.citation_coverage)}</td>
-              <td className="px-3 py-2">{result.latency_ms} ms</td>
-              <td className="max-w-72 truncate px-3 py-2">
-                {[...result.matched_files, ...result.matched_symbols].join(", ") || "-"}
-              </td>
-              <td className="max-w-72 truncate px-3 py-2">{result.error_message ?? "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function V1BenchmarkPanel({ result }: { result: V1BenchmarkResponse }) {
-  const review = result.metrics.review;
-  const multiAgent = result.metrics.multi_agent;
-  const mcp = result.metrics.mcp;
-
-  return (
-    <div className="mt-4">
-      {result.warnings.length ? (
-        <div className="mb-4 flex flex-col gap-2">
-          {result.warnings.slice(0, 5).map((warning) => (
-            <div
-              key={warning}
-              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-            >
-              {warning}
+          </thead>
+          <tbody>
+            {run.metrics.map((metric) => (
+              <tr key={metric.strategy}>
+                <td className="border-b border-line px-3 py-2 font-medium">{metric.strategy}</td>
+                <td className="border-b border-line px-3 py-2">{formatPercent(metric.hit_at_5)}</td>
+                <td className="border-b border-line px-3 py-2">{formatScore(metric.mrr)}</td>
+                <td className="border-b border-line px-3 py-2">{formatPercent(metric.citation_coverage)}</td>
+                <td className="border-b border-line px-3 py-2">{metric.avg_latency_ms.toFixed(1)} ms</td>
+                <td className="border-b border-line px-3 py-2">{metric.error_count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-col gap-2">
+        {run.results.slice(0, 6).map((result) => (
+          <div key={result.id} className="rounded-md border border-line bg-white p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{result.sample_id}</span>
+              <span className="text-xs text-muted">{result.strategy} / {result.hit_at_5 ? "hit" : "miss"}</span>
             </div>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 xl:grid-cols-3">
-        {review ? <V1MetricGroup title="Review" metrics={review} /> : null}
-        {multiAgent ? <V1MetricGroup title="Multi-Agent" metrics={multiAgent} /> : null}
-        {mcp ? <V1MetricGroup title="MCP" metrics={mcp} /> : null}
-      </div>
-
-      <V1BenchmarkResultsTable results={result.results} />
-
-      <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-surface p-3 text-xs leading-5 text-ink">
-        {result.report_markdown}
-      </pre>
-    </div>
-  );
-}
-
-function V1MetricGroup({
-  metrics,
-  title
-}: {
-  metrics: Record<string, unknown>;
-  title: string;
-}) {
-  const entries = Object.entries(metrics).filter(([, value]) => typeof value !== "object");
-  return (
-    <div className="rounded-md border border-line bg-surface p-3">
-      <div className="text-sm font-semibold">{title}</div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {entries.map(([key, value]) => (
-          <TraceText key={key} label={key.replaceAll("_", " ")} value={formatMetricValue(value)} />
+            <div className="mt-1 break-all text-xs text-muted">{result.matched_files.join(", ") || "-"}</div>
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-function V1BenchmarkResultsTable({ results }: { results: V1BenchmarkSampleResult[] }) {
+function EvaluationRunList({ runs }: { runs: EvaluationRunSummary[] }) {
+  if (!runs.length) {
+    return <EmptyState label="No previous runs" />;
+  }
   return (
-    <div className="mt-4 max-h-96 max-w-full overflow-auto rounded-md border border-line">
-      <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-        <thead className="sticky top-0 bg-surface text-xs uppercase text-muted">
-          <tr>
-            <th className="px-3 py-2">Sample</th>
-            <th className="px-3 py-2">Platform</th>
-            <th className="px-3 py-2">Review Hit</th>
-            <th className="px-3 py-2">Multi-Agent</th>
-            <th className="px-3 py-2">MCP Calls</th>
-            <th className="px-3 py-2">Errors</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((result) => (
-            <tr key={result.sample_id} className="border-t border-line">
-              <td className="px-3 py-2">
-                <div className="font-medium">{result.sample_id}</div>
-                <div className="max-w-72 truncate text-xs text-muted">{result.title}</div>
-              </td>
-              <td className="px-3 py-2">{result.platform}</td>
-              <td className="px-3 py-2">{boolText(result.review?.risk_hit)}</td>
-              <td className="px-3 py-2">
-                {boolText(result.multi_agent?.arbiter_resolved)}
-                <span className="ml-2 text-xs text-muted">
-                  {formatMetricValue(result.multi_agent?.token_overhead_ratio)}
-                </span>
-              </td>
-              <td className="px-3 py-2">{result.mcp.length}</td>
-              <td className="max-w-72 truncate px-3 py-2">{result.errors.join("; ") || "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function McpPermissionsPanel({
-  error,
-  state,
-  toolCalls,
-  tools,
-  onRefresh
-}: {
-  error: string | null;
-  state: "idle" | "loading" | "ready" | "failed";
-  toolCalls: McpToolCallAudit[];
-  tools: McpToolInfo[];
-  onRefresh: () => void;
-}) {
-  const enabledCount = tools.filter((tool) => tool.enabled).length;
-  const attentionCount = toolCalls.filter((toolCall) =>
-    ["denied", "disabled", "failed"].includes(toolCall.status)
-  ).length;
-
-  return (
-    <section className="min-w-0 rounded-md border border-line bg-white p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h2 className="text-base font-semibold">MCP Tool Permissions</h2>
-          <div className="mt-1 text-sm text-muted">{state}</div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 md:justify-end">
-          <SourcePill value={`${enabledCount}/${tools.length} enabled`} />
-          <SourcePill value={`${toolCalls.length} calls`} />
-          <SourcePill value={`${attentionCount} attention`} />
-          <button
-            className="rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:text-muted"
-            disabled={state === "loading"}
-            onClick={onRefresh}
-            type="button"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Registry</h3>
-          <div className="mt-3 grid gap-2">
-            {tools.length ? (
-              tools.map((tool) => <McpToolRow key={tool.name} tool={tool} />)
-            ) : (
-              <div className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
-                No MCP tools
-              </div>
-            )}
+    <div className="flex flex-col gap-2">
+      {runs.slice(0, 5).map((run) => (
+        <div key={run.run_id} className="rounded-md border border-line bg-white p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-medium">{run.name}</span>
+            <span className="text-xs text-muted">{run.status}</span>
           </div>
+          <div className="mt-1 text-xs text-muted">{formatDate(run.completed_at ?? run.created_at)}</div>
         </div>
-
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Recent Calls</h3>
-          <div className="mt-3 grid gap-2">
-            {toolCalls.length ? (
-              toolCalls.slice(0, 8).map((toolCall) => (
-                <McpToolCallAuditRow key={toolCall.id} toolCall={toolCall} />
-              ))
-            ) : (
-              <div className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
-                No MCP calls
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function McpToolRow({ tool }: { tool: McpToolInfo }) {
-  const required = inputSchemaRequired(tool.input_schema);
-
-  return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{tool.name}</div>
-          <div className="mt-1 text-sm text-muted">{tool.description}</div>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={tool.permission_policy} />
-          <SourcePill value={tool.enabled ? "enabled" : "disabled"} />
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {(required.length ? required : ["no required args"]).map((field) => (
-          <SourcePill key={field} value={field} />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function McpToolCallAuditRow({ toolCall }: { toolCall: McpToolCallAudit }) {
-  return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{toolCall.tool_name}</div>
-          <div className="mt-1 text-sm text-muted">{toolCall.input_summary}</div>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={toolCall.status} />
-          <SourcePill value={toolCall.permission_decision} />
-          <SourcePill value={`${toolCall.latency_ms ?? 0} ms`} />
-        </div>
-      </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <TraceText label="Client" value={toolCall.client_name ?? "-"} />
-        <TraceText label="Session" value={toolCall.client_session_id ?? "-"} />
-        <TraceText label="Input Hash" value={shortHash(toolCall.input_hash)} />
-        <TraceText label="Output Hash" value={shortHash(toolCall.output_hash)} />
-      </div>
-      {toolCall.output_summary ? (
-        <div className="mt-3 rounded-md border border-line bg-white p-3 text-sm leading-6">
-          {toolCall.output_summary}
-        </div>
-      ) : null}
-      {toolCall.error_message ? (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {toolCall.error_message}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function ToolCallsPanel({ toolCalls }: { toolCalls: ReviewToolCall[] }) {
-  return (
-    <div className="mt-4">
-      <h3 className="text-sm font-semibold">Tool Calls</h3>
-      <div className="mt-3 flex flex-col gap-3">
-        {toolCalls.map((toolCall) => (
-          <ToolCallRow key={toolCall.id} toolCall={toolCall} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ToolCallRow({ toolCall }: { toolCall: ReviewToolCall }) {
-  return (
-    <article className="rounded-md border border-line bg-surface p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">{toolCall.tool_name}</div>
-          <div className="mt-1 text-sm text-muted">{toolCall.input_summary}</div>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={toolCall.status} />
-          <SourcePill value={toolCall.permission_decision} />
-          <SourcePill value={`${toolCall.latency_ms ?? 0} ms`} />
-        </div>
-      </div>
-      {toolCall.output_summary ? (
-        <div className="mt-3 rounded-md border border-line bg-white p-3 text-sm leading-6">
-          {toolCall.output_summary}
-        </div>
-      ) : null}
-      {toolCall.error_message ? (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {toolCall.error_message}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function TracePanel({ traces }: { traces: AgentTrace[] }) {
-  return (
-    <div className="mt-4">
-      <h3 className="text-sm font-semibold">Trace</h3>
-      <div className="mt-3 flex flex-col gap-3">
-        {traces.map((trace) => (
-          <article key={trace.id} className="rounded-md border border-line bg-surface p-3">
-            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div className="text-sm font-semibold">
-                  {trace.step_order}. {trace.step_name}
-                </div>
-                <div className="mt-1 text-xs uppercase text-muted">{trace.status}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <SourcePill value={`${trace.latency_ms ?? 0} ms`} />
-                <SourcePill value={`${trace.evidence_ids.length} evidence`} />
-                <SourcePill value={`${Number(trace.token_usage.total_tokens ?? 0)} tokens`} />
-              </div>
-            </div>
-            <div className="mt-3 grid gap-2 lg:grid-cols-2">
-              <TraceText label="Input" value={trace.input_summary} />
-              <TraceText label="Output" value={trace.output_summary ?? "-"} />
-            </div>
-            {trace.tool_calls.length ? (
-              <div className="mt-3 flex flex-col gap-2">
-                {trace.tool_calls.map((toolCall, index) => (
-                  <TraceToolCallRow key={`${trace.id}-tool-${index}`} toolCall={toolCall} />
-                ))}
-              </div>
-            ) : null}
-            {trace.error_message ? (
-              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                {trace.error_message}
-              </div>
-            ) : null}
-          </article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TraceToolCallRow({ toolCall }: { toolCall: Record<string, unknown> }) {
-  return (
-    <div className="rounded-md border border-line bg-white p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="break-words text-sm font-semibold">
-            {stringValue(toolCall.tool_name) || stringValue(toolCall.name) || "tool"}
-          </div>
-          <div className="mt-1 text-sm text-muted">
-            {stringValue(toolCall.input_summary) || stringValue(toolCall.output_summary) || "-"}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <SourcePill value={stringValue(toolCall.status) || "-"} />
-          <SourcePill value={stringValue(toolCall.permission_decision) || "-"} />
-          <SourcePill value={`${numberValue(toolCall.latency_ms)} ms`} />
-        </div>
-      </div>
-      {stringValue(toolCall.error_message) ? (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {stringValue(toolCall.error_message)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function TraceText({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-white p-3">
-      <div className="text-xs uppercase text-muted">{label}</div>
-      <div className="mt-2 break-words text-sm">{value}</div>
+      ))}
     </div>
   );
 }
 
 function SourcePill({ value }: { value: string }) {
   return (
-    <span className="rounded-md border border-line bg-white px-2 py-1 text-xs font-medium text-muted">
+    <span className="max-w-full break-all rounded-md border border-line bg-white px-2 py-1 text-xs font-medium text-ink">
       {value}
     </span>
   );
 }
 
-function formatScore(value: number) {
-  return value.toFixed(3);
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
+      {label}
+    </div>
+  );
 }
 
-function formatOptionalScore(value?: number) {
-  return typeof value === "number" ? formatScore(value) : "-";
+function Alert({ message, tone }: { message: string; tone: "red" | "amber" }) {
+  const className =
+    tone === "red"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : "border-amber-200 bg-amber-50 text-amber-800";
+  return <div className={`mt-4 rounded-md border px-3 py-2 text-sm ${className}`}>{message}</div>;
 }
 
-function formatPercent(value: number) {
-  return `${Math.round(value * 1000) / 10}%`;
+function routePath(metadata: Record<string, unknown>): string | null {
+  const route = metadata.route;
+  if (typeof route === "string" && route.trim()) {
+    return route;
+  }
+  if (route && typeof route === "object" && "path" in route) {
+    const path = (route as { path?: unknown }).path;
+    return typeof path === "string" && path.trim() ? path : null;
+  }
+  return null;
 }
 
-function formatNumber(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+function stringListValue(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
-function formatDate(value?: string | null) {
+function stringValue(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value : "-";
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" ? value : 0;
+}
+
+function confidenceText(result: QATaskResponse): string {
+  return result.confidence == null ? "confidence -" : `confidence ${formatPercent(result.confidence)}`;
+}
+
+function formatDate(value: string | null | undefined): string {
   if (!value) {
     return "-";
   }
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "short",
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
 }
 
-function inputSchemaRequired(inputSchema: Record<string, unknown>) {
-  const required = inputSchema.required;
-  if (!Array.isArray(required)) {
-    return [];
-  }
-  return required.filter((value): value is string => typeof value === "string");
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
 }
 
-function shortHash(value: string | null) {
-  return value ? value.slice(0, 12) : "-";
+function formatScore(value: number): string {
+  return value.toFixed(3);
 }
 
-function stringValue(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
-function numberValue(value: unknown) {
-  return typeof value === "number" ? value : 0;
-}
-
-function formatMetricValue(value: unknown) {
-  if (typeof value === "number") {
-    return Number.isInteger(value) ? String(value) : value.toFixed(3);
-  }
-  if (typeof value === "boolean") {
-    return value ? "yes" : "no";
-  }
-  return typeof value === "string" && value ? value : "-";
-}
-
-function boolText(value: unknown) {
-  if (typeof value !== "boolean") {
-    return "-";
-  }
-  return value ? "yes" : "no";
-}
-
-function stringListValue(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function prettyJson(value: unknown) {
-  return JSON.stringify(value, null, 2);
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
 }
