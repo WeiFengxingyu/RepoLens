@@ -1318,7 +1318,7 @@ Evaluation -> 可复用 V1 benchmark，新增任务耗时、失败率、队列�
 - MQ 重复投递不会重复扣配额或重复生成报告。
 - Grafana 能展示任务成功率、队列积压、失败原因分布和 p95 耗时。
 
-详细计划见 `docs/repolens-java-v2-lite-reviewhub-plan.md`。
+概要方案见 `docs/repolens-java-v2-lite-reviewhub-plan.md`，可直接对照开发的分阶段计划见 `docs/repolens-java-v2-lite-phased-execution-plan.md`。
 
 ## 22. 最终判断
 

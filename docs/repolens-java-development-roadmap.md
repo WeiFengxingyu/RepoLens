@@ -483,7 +483,7 @@ V2-Lite 能补足传统 Java 后端面试最常追问的内容：
 - RBAC、规则集、配额等业务系统建模。
 - Actuator、Micrometer、Prometheus、Grafana 可观测性。
 
-详细执行方案见 `docs/repolens-java-v2-lite-reviewhub-plan.md`。
+概要方案见 `docs/repolens-java-v2-lite-reviewhub-plan.md`，可直接对照开发的分阶段计划见 `docs/repolens-java-v2-lite-phased-execution-plan.md`。
 
 ## 17. V2：完整生产化预留版本
 

@@ -10,7 +10,7 @@
 | 文档类型 | 生产化增强计划书 / 传统 Java 后端能力补强方案 |
 | 创建日期 | 2026-06-29 |
 | 前置版本 | V1：仓库级 Code Agent 工作台；V1.1：真实 PR/MR URL Provider |
-| 关联文档 | `docs/repolens-java-development-roadmap.md`、`docs/repolens-java-requirements-outline-design.md`、`docs/repolens-java-v1-phased-execution-plan.md` |
+| 关联文档 | `docs/repolens-java-development-roadmap.md`、`docs/repolens-java-requirements-outline-design.md`、`docs/repolens-java-v1-phased-execution-plan.md`、`docs/repolens-java-v2-lite-phased-execution-plan.md` |
 
 ## 2. 版本定位
 
@@ -273,6 +273,8 @@ V2-Lite 前端不做营销页，继续是工作台：
 - Metrics：队列积压、成功率、失败原因、p95 耗时。
 
 ## 11. 分阶段执行计划
+
+本节是概要拆分。可直接对照执行的详细计划见 `docs/repolens-java-v2-lite-phased-execution-plan.md`。
 
 ### P0：基线收束与技术选型
 
