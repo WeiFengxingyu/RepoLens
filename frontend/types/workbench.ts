@@ -198,6 +198,10 @@ export type ChangeRequestMetadata = {
   addition_count: number;
   deletion_count: number;
   commit_count: number;
+  provider_status: string;
+  diff_hash: string | null;
+  metadata: Record<string, unknown>;
+  error_message: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -320,6 +324,169 @@ export type ReviewTaskResponse = {
 export type ChangeRequestReviewResponse = {
   change_request: ChangeRequestMetadata;
   review: ReviewTaskResponse;
+};
+
+export type OrganizationCreateRequest = {
+  name: string;
+  plan_name?: string;
+  owner_user_id?: string;
+};
+
+export type OrganizationResponse = {
+  id: string;
+  name: string;
+  plan_name: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectCreateRequest = {
+  name: string;
+};
+
+export type ProjectResponse = {
+  id: string;
+  organization_id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RepositoryBindingCreateRequest = {
+  provider: string;
+  external_repo_id: string;
+  webhook_secret?: string;
+};
+
+export type RepositoryBindingResponse = {
+  id: string;
+  project_id: string;
+  repository_id: string;
+  provider: string;
+  external_repo_id: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReviewRulesetCreateRequest = {
+  name: string;
+  enabled?: boolean;
+  rules: Record<string, unknown>;
+};
+
+export type ReviewRulesetResponse = {
+  id: string;
+  project_id: string;
+  name: string;
+  rules: Record<string, unknown>;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuotaBucketResponse = {
+  id: string;
+  scope_type: string;
+  scope_id: string;
+  quota_type: string;
+  used_count: number;
+  limit_count: number;
+  window_start: string;
+  window_end: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AuditLogResponse = {
+  id: string;
+  actor: string | null;
+  action: string;
+  scope_type: string;
+  scope_id: string;
+  message: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type JobAttemptResponse = {
+  id: string;
+  job_id: string;
+  attempt_no: number;
+  worker_id: string;
+  status: string;
+  started_at: string;
+  heartbeat_at: string | null;
+  finished_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+};
+
+export type JobEventResponse = {
+  id: string;
+  job_id: string;
+  attempt_id: string | null;
+  event_type: string;
+  message: string | null;
+  payload_json: string | null;
+  created_at: string;
+};
+
+export type JobResponse = {
+  id: string;
+  job_type: string;
+  status: string;
+  priority: number;
+  repository_id: string | null;
+  project_id: string | null;
+  idempotency_key: string | null;
+  payload_json: string | null;
+  result_ref: string | null;
+  created_by: string | null;
+  next_run_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  attempts: JobAttemptResponse[];
+  events: JobEventResponse[];
+};
+
+export type WorkerResponse = {
+  worker_id: string;
+  status: string;
+  current_job_id: string | null;
+  heartbeat_at: string;
+};
+
+export type WebhookReviewRequest = {
+  external_repo_id: string;
+  change_url: string;
+  event?: string;
+  action?: string;
+  commit_sha?: string;
+  sender?: string;
+  top_k?: number;
+  use_bm25?: boolean;
+  use_vector?: boolean;
+  use_graph?: boolean;
+  run_static_check?: boolean;
+};
+
+export type WebhookJobResponse = {
+  provider: string;
+  external_repo_id: string;
+  project_id: string;
+  repository_id: string;
+  ruleset_id: string | null;
+  idempotency_key: string;
+  idempotent_replay: boolean;
+  quota: QuotaBucketResponse | null;
+  job: JobResponse;
 };
 
 export type AgentSessionResponse = {

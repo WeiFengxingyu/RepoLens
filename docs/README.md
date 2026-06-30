@@ -34,6 +34,19 @@ This directory keeps product design, phase records, release packaging, and inter
 | `repolens-java-v1-demo-runbook.md` | Repeatable Java Edition V1 demo path for repository import, Search, Ask, Review, MCP, and Eval |
 | `repolens-java-v1-release-package.md` | Java Edition V1 release package with capability map, APIs, resume bullets, tradeoffs, and verification commands |
 | `repolens-java-v1-final-closure-review.md` | Final Java Edition V1 closure review and acceptance matrix |
+| `repolens-java-v1.1-phased-execution-plan.md` | Java Edition V1.1 phased execution plan for real PR/MR URL Review, Provider SPI, frontend integration, and release closure |
+| `repolens-java-v1.1-shared-detailed-design.md` | Shared V1.1 detailed design for Change Request Provider, metadata persistence, security, API, frontend, and tests |
+| `repolens-java-v1.1-design-and-worklog.md` | Shared V1.1 execution record for P0-P4 implementation, verification, and phase closure notes |
+| `repolens-java-v1.1-demo-runbook.md` | Repeatable Java Edition V1.1 demo path for fixture-backed PR/MR URL Review and optional live smoke |
+| `repolens-java-v1.1-real-pr-mr-cases.md` | Real GitHub/GitLab/Gitee PR/MR live-smoke notes and boundaries |
+| `repolens-java-v1.1-final-closure-review.md` | Final Java Edition V1.1 closure review and acceptance matrix |
+| `repolens-java-v2-lite-p0-p3-detailed-design.md` | V2-Lite P0-P3 detailed design for local-first Job Center, Worker runtime, retry/dead-letter handling, and Redis-style concurrency control |
+| `repolens-java-v2-lite-p4-p5-detailed-design.md` | V2-Lite P4-P5 detailed design for ReviewHub business domain, project governance, quota, audit, and webhook-driven async PR/MR review |
+| `repolens-java-v2-lite-p6-p7-detailed-design.md` | V2-Lite P6-P7 detailed design for frontend workbench, observability entry points, demo runbook, release package, and final closure |
+| `repolens-java-v2-lite-demo-runbook.md` | Repeatable Java V2-Lite demo path for ReviewHub, webhook-triggered async review, quota, audit, jobs, and frontend workbench |
+| `repolens-java-v2-lite-release-package.md` | Java V2-Lite release package with architecture, API map, resume bullets, interview talk track, verification, and V2 Full roadmap |
+| `repolens-java-v2-lite-final-closure-review.md` | Final Java V2-Lite closure review and acceptance matrix across P0-P7 |
+| `repolens-java-v2-lite-design-and-worklog.md` | Shared V2-Lite P0-P7 process record with implementation notes, phase closure status, and verification results |
 | `repolens-java-v0-design-and-worklog.md` | Shared lightweight detailed design and execution log for all Java Edition V0 sub-phases |
 | `repolens-java-v0-demo-runbook.md` | Repeatable Java Edition V0 demo path for local import, Lucene BM25 retrieval, frontend evidence display, tests, and known limits |
 | `repolens-java-environment.md` | Local Java environment notes and per-shell Java version switching instructions |
@@ -81,6 +94,7 @@ Phase records stay at the top level to preserve the development audit trail. Eac
 | `../evals/datasets/p0_plus_eval.jsonl` | 50-sample retrieval evaluation dataset |
 | `../evals/datasets/v1_pr_mr_benchmark.jsonl` | 22-sample V1 PR/MR benchmark dataset |
 | `../evals/change_requests/phase6_demo_prs.json` | Offline PR/MR demo fixture |
+| `../evals/change_requests/repolens_java_v1_1_fixture_cases.json` | Java Edition V1.1 offline fixture-backed PR/MR URL Review case |
 | `../evals/change_requests/real_pr_mr_case_studies.json` | Structured real PR/MR case-study candidates |
 | `../scripts/seed_demo.ps1` | One-command local demo seed for import, retrieval, MCP, and V1 benchmark |
 | `assets/screenshots/` | Workbench screenshots for README, demo, and interview packaging |

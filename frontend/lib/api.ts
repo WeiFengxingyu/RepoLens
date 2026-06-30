@@ -1,18 +1,29 @@
 import type {
   ChangeRequestReviewCreateRequest,
   ChangeRequestReviewResponse,
+  AuditLogResponse,
   EvaluationCreateRequest,
   EvaluationRunResponse,
   EvaluationRunSummary,
+  JobResponse,
   McpToolCallAudit,
   McpToolCallRequest,
   McpToolCallResponse,
   McpToolInfo,
   MultiAgentReviewCreateRequest,
   MultiAgentReviewResponse,
+  OrganizationCreateRequest,
+  OrganizationResponse,
   QACreateRequest,
   QATaskResponse,
+  ProjectCreateRequest,
+  ProjectResponse,
+  QuotaBucketResponse,
+  RepositoryBindingCreateRequest,
+  RepositoryBindingResponse,
   ReviewCreateRequest,
+  ReviewRulesetCreateRequest,
+  ReviewRulesetResponse,
   ReviewTaskResponse,
   RepositoryDetail,
   RepositoryImportRequest,
@@ -20,6 +31,9 @@ import type {
   RepositorySummary,
   RetrievalRequest,
   RetrievalResponse,
+  WebhookJobResponse,
+  WebhookReviewRequest,
+  WorkerResponse,
   V1BenchmarkCreateRequest,
   V1BenchmarkResponse
 } from "@/types/workbench";
@@ -163,6 +177,99 @@ export async function callMcpTool(
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export async function createOrganization(
+  payload: OrganizationCreateRequest
+): Promise<OrganizationResponse> {
+  return request<OrganizationResponse>("/api/organizations", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listOrganizations(limit = 20): Promise<OrganizationResponse[]> {
+  return request<OrganizationResponse[]>(`/api/organizations?limit=${limit}`);
+}
+
+export async function createProject(
+  organizationId: string,
+  payload: ProjectCreateRequest
+): Promise<ProjectResponse> {
+  return request<ProjectResponse>(`/api/organizations/${organizationId}/projects`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listProjects(organizationId: string): Promise<ProjectResponse[]> {
+  return request<ProjectResponse[]>(`/api/organizations/${organizationId}/projects`);
+}
+
+export async function bindRepositoryToProject(
+  projectId: string,
+  repositoryId: string,
+  payload: RepositoryBindingCreateRequest
+): Promise<RepositoryBindingResponse> {
+  return request<RepositoryBindingResponse>(
+    `/api/projects/${projectId}/repositories/${repositoryId}/bind`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function listProjectBindings(
+  projectId: string
+): Promise<RepositoryBindingResponse[]> {
+  return request<RepositoryBindingResponse[]>(`/api/projects/${projectId}/repositories`);
+}
+
+export async function createReviewRuleset(
+  projectId: string,
+  payload: ReviewRulesetCreateRequest
+): Promise<ReviewRulesetResponse> {
+  return request<ReviewRulesetResponse>(`/api/projects/${projectId}/rulesets`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listReviewRulesets(
+  projectId: string
+): Promise<ReviewRulesetResponse[]> {
+  return request<ReviewRulesetResponse[]>(`/api/projects/${projectId}/rulesets`);
+}
+
+export async function listProjectQuota(projectId: string): Promise<QuotaBucketResponse[]> {
+  return request<QuotaBucketResponse[]>(`/api/projects/${projectId}/quota`);
+}
+
+export async function listAuditLogs(limit = 50): Promise<AuditLogResponse[]> {
+  return request<AuditLogResponse[]>(`/api/audit-logs?limit=${limit}`);
+}
+
+export async function triggerWebhookReview(
+  provider: string,
+  payload: WebhookReviewRequest
+): Promise<WebhookJobResponse> {
+  return request<WebhookJobResponse>(`/api/webhooks/${provider}`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listJobs(limit = 30): Promise<JobResponse[]> {
+  return request<JobResponse[]>(`/api/jobs?limit=${limit}`);
+}
+
+export async function getJob(jobId: string): Promise<JobResponse> {
+  return request<JobResponse>(`/api/jobs/${jobId}`);
+}
+
+export async function listWorkers(): Promise<WorkerResponse[]> {
+  return request<WorkerResponse[]>("/api/workers");
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

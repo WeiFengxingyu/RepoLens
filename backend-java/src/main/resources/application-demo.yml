@@ -15,3 +15,6 @@ repolens:
     vector-enabled: true
     graph-enabled: true
     vector-dimensions: 64
+  change-request:
+    timeout-seconds: 20
+    max-diff-chars: 200000

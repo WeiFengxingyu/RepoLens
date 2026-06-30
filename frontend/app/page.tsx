@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import { V2LitePanel } from "./v2-lite-panel";
 import {
   API_BASE_URL,
   askRepositoryQuestion,
   callMcpTool,
+  createChangeRequestReview,
   createEvaluation,
   createReview,
   getRepository,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/api";
 import type {
   AgentTrace,
+  ChangeRequestReviewResponse,
   EvaluationRunResponse,
   EvaluationRunSummary,
   EvaluationStrategy,
@@ -40,15 +43,17 @@ import type {
   ReviewToolCall
 } from "@/types/workbench";
 
-type WorkbenchTab = "search" | "ask" | "review" | "mcp" | "eval";
+type WorkbenchTab = "search" | "ask" | "review" | "mcp" | "eval" | "v2lite";
 type AsyncState = "idle" | "running" | "ready" | "empty" | "failed";
+type ReviewMode = "diff" | "url";
 
 const tabs: Array<{ id: WorkbenchTab; label: string }> = [
   { id: "search", label: "Search" },
   { id: "ask", label: "Ask" },
   { id: "review", label: "Review" },
   { id: "mcp", label: "MCP" },
-  { id: "eval", label: "Eval" }
+  { id: "eval", label: "Eval" },
+  { id: "v2lite", label: "V2-Lite" }
 ];
 
 const metricLabels: Array<{
@@ -67,6 +72,7 @@ const metricLabels: Array<{
 
 const defaultQuery = "RepositoryApplicationService index task retrieval";
 const defaultQuestion = "Where is repository import and indexing started?";
+const defaultChangeRequestUrl = "fixture://github/repolens-java/1";
 const defaultDiff = `diff --git a/src/main/java/com/demo/SecurityConfig.java b/src/main/java/com/demo/SecurityConfig.java
 --- a/src/main/java/com/demo/SecurityConfig.java
 +++ b/src/main/java/com/demo/SecurityConfig.java
@@ -102,7 +108,10 @@ export default function Home() {
   const [qaError, setQaError] = useState<string | null>(null);
 
   const [diffText, setDiffText] = useState(defaultDiff);
+  const [reviewMode, setReviewMode] = useState<ReviewMode>("diff");
+  const [changeRequestUrl, setChangeRequestUrl] = useState(defaultChangeRequestUrl);
   const [reviewResult, setReviewResult] = useState<ReviewTaskResponse | null>(null);
+  const [changeRequestResult, setChangeRequestResult] = useState<ChangeRequestReviewResponse | null>(null);
   const [reviewState, setReviewState] = useState<AsyncState>("idle");
   const [reviewError, setReviewError] = useState<string | null>(null);
 
@@ -184,6 +193,7 @@ export default function Home() {
     setQaState("idle");
     setQaError(null);
     setReviewResult(null);
+    setChangeRequestResult(null);
     setReviewState("idle");
     setReviewError(null);
     setMcpCallResult(null);
@@ -279,8 +289,13 @@ export default function Home() {
       setReviewState("failed");
       return;
     }
-    if (!diffText.trim()) {
+    if (reviewMode === "diff" && !diffText.trim()) {
       setReviewError("Diff text is required.");
+      setReviewState("failed");
+      return;
+    }
+    if (reviewMode === "url" && !changeRequestUrl.trim()) {
+      setReviewError("PR/MR URL is required.");
       setReviewState("failed");
       return;
     }
@@ -288,18 +303,33 @@ export default function Home() {
     setReviewState("running");
     setReviewError(null);
     try {
-      const result = await createReview(selectedRepository.id, {
-        diff_text: diffText,
-        top_k: topK,
-        use_bm25: useBm25,
-        use_vector: useVector,
-        use_graph: useGraph,
-        run_static_check: false
-      });
-      setReviewResult(result);
+      if (reviewMode === "url") {
+        const result = await createChangeRequestReview(selectedRepository.id, {
+          url: changeRequestUrl.trim(),
+          top_k: topK,
+          use_bm25: useBm25,
+          use_vector: useVector,
+          use_graph: useGraph,
+          run_static_check: false
+        });
+        setChangeRequestResult(result);
+        setReviewResult(result.review);
+      } else {
+        const result = await createReview(selectedRepository.id, {
+          diff_text: diffText,
+          top_k: topK,
+          use_bm25: useBm25,
+          use_vector: useVector,
+          use_graph: useGraph,
+          run_static_check: false
+        });
+        setChangeRequestResult(null);
+        setReviewResult(result);
+      }
       setReviewState("ready");
     } catch (error) {
       setReviewResult(null);
+      setChangeRequestResult(null);
       setReviewState("failed");
       setReviewError(error instanceof Error ? error.message : "Review failed.");
     }
@@ -411,7 +441,7 @@ export default function Home() {
         <header className="flex flex-col gap-2 border-b border-line pb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-medium text-muted">RepoLens Java</p>
-            <h1 className="text-2xl font-semibold">V1 Code Agent Workbench</h1>
+            <h1 className="text-2xl font-semibold">V2-Lite Code Agent Workbench</h1>
           </div>
           <div className="text-sm text-muted">Java 21 / Spring Boot / MCP</div>
         </header>
@@ -510,7 +540,8 @@ export default function Home() {
       ask: qaState,
       review: reviewState,
       mcp: mcpState,
-      eval: evaluationState
+      eval: evaluationState,
+      v2lite: "ready"
     };
     return statusMap[activeTab];
   }
@@ -527,6 +558,17 @@ export default function Home() {
     }
     if (activeTab === "mcp") {
       return renderMcpPanel();
+    }
+    if (activeTab === "v2lite") {
+      return (
+        <V2LitePanel
+          selectedRepository={selectedRepository}
+          topK={topK}
+          useBm25={useBm25}
+          useVector={useVector}
+          useGraph={useGraph}
+        />
+      );
     }
     return renderEvaluationPanel();
   }
@@ -611,16 +653,41 @@ export default function Home() {
     return (
       <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <form className="flex flex-col gap-3" onSubmit={handleReview}>
-          <textarea
-            className="min-h-80 rounded-md border border-line bg-white px-3 py-2 font-mono text-xs leading-5 outline-none focus:border-ink disabled:bg-surface"
-            disabled={!selectedRepository || reviewState === "running"}
-            value={diffText}
-            onChange={(event) => setDiffText(event.target.value)}
-          />
+          <div className="grid grid-cols-2 gap-2 rounded-md border border-line bg-surface p-1">
+            <button
+              className={`rounded px-3 py-2 text-sm font-medium ${reviewMode === "diff" ? "bg-white text-ink shadow-sm" : "text-muted"}`}
+              onClick={() => setReviewMode("diff")}
+              type="button"
+            >
+              Diff
+            </button>
+            <button
+              className={`rounded px-3 py-2 text-sm font-medium ${reviewMode === "url" ? "bg-white text-ink shadow-sm" : "text-muted"}`}
+              onClick={() => setReviewMode("url")}
+              type="button"
+            >
+              PR/MR URL
+            </button>
+          </div>
+          {reviewMode === "diff" ? (
+            <textarea
+              className="min-h-80 rounded-md border border-line bg-white px-3 py-2 font-mono text-xs leading-5 outline-none focus:border-ink disabled:bg-surface"
+              disabled={!selectedRepository || reviewState === "running"}
+              value={diffText}
+              onChange={(event) => setDiffText(event.target.value)}
+            />
+          ) : (
+            <input
+              className="rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink disabled:bg-surface"
+              disabled={!selectedRepository || reviewState === "running"}
+              value={changeRequestUrl}
+              onChange={(event) => setChangeRequestUrl(event.target.value)}
+            />
+          )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {renderSharedRetrievalControls()}
             <RunButton disabled={!isReady || reviewState === "running"}>
-              {reviewState === "running" ? "Reviewing" : "Review"}
+              {reviewState === "running" ? "Reviewing" : reviewMode === "url" ? "Review URL" : "Review"}
             </RunButton>
           </div>
           {reviewError ? <Alert tone="red" message={reviewError} /> : null}
@@ -629,6 +696,7 @@ export default function Home() {
         <section className="min-w-0">
           {reviewResult ? (
             <div className="flex flex-col gap-3">
+              {changeRequestResult ? <ChangeRequestMetadataPanel result={changeRequestResult} /> : null}
               <ResultHeader
                 title="Review"
                 status={reviewResult.status}
@@ -1142,6 +1210,26 @@ function ReviewCitationList({ citations }: { citations: ReviewCitation[] }) {
           <div className="mt-1 text-muted">{stringValue(citation.symbol_name)}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ChangeRequestMetadataPanel({ result }: { result: ChangeRequestReviewResponse }) {
+  const item = result.change_request;
+  return (
+    <div className="rounded-md border border-line bg-white p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-semibold">{item.platform} / {item.change_type}</div>
+        <div className="text-xs text-muted">{item.provider_status}</div>
+      </div>
+      <div className="mt-2 break-all text-muted">{item.title}</div>
+      <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
+        <div>{item.owner}/{item.repo}#{item.number}</div>
+        <div>{`${item.source_branch ?? "-"} -> ${item.target_branch ?? "-"}`}</div>
+        <div>{item.changed_file_count} files / +{item.addition_count} -{item.deletion_count}</div>
+        <div>{item.commit_count} commits / {item.state ?? "-"}</div>
+      </div>
+      <div className="mt-2 break-all text-xs text-muted">{item.url}</div>
     </div>
   );
 }

@@ -1,0 +1,26 @@
+repolens:
+  version: v2-lite
+  v2-lite:
+    enabled: true
+    worker:
+      local-enabled: true
+      pool-size: 2
+      max-attempts: 3
+      retry-backoff-seconds: 2
+      heartbeat-timeout-seconds: 60
+    concurrency:
+      lock-ttl-seconds: 1800
+      idempotency-ttl-seconds: 86400
+      review-rate-limit-per-minute: 60
+      status-cache-ttl-seconds: 300
+    review-hub:
+      default-quota-limit: 1000
+      quota-window-minutes: 60
+    webhook:
+      require-secret: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

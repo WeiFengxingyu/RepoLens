@@ -1,0 +1,14 @@
+[
+  {
+    "id": "java-v1.1-fixture-github-1",
+    "repository_key": "java_demo",
+    "url": "fixture://github/repolens-java/1",
+    "platform": "fixture-github",
+    "title": "Fixture PR 1: relax security config",
+    "expected_risks": [
+      "Authentication bypass",
+      "Null return"
+    ],
+    "notes": "Offline deterministic fixture used by the Java V1.1 Change Request Provider tests and demo."
+  }
+]

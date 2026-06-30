@@ -80,6 +80,11 @@ public class ReviewService {
 
     @Transactional
     public ReviewTaskResponse review(String repositoryId, ReviewCreateRequest request) {
+        return review(repositoryId, request, null);
+    }
+
+    @Transactional
+    public ReviewTaskResponse review(String repositoryId, ReviewCreateRequest request, String originSummary) {
         RepositoryEntity repository = repositoryJpaRepository.findById(repositoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
         if (repository.getStatus() != RepositoryStatus.READY) {
@@ -118,7 +123,8 @@ public class ReviewService {
             List<String> impactedSymbols = impactedSymbols(parsedDiff, evidences);
             List<Map<String, Object>> suggestedTests = suggestedTests(parsedDiff, risks);
             String riskLevel = riskLevel(risks);
-            String summary = "Review completed for " + parsedDiff.changedFileCount() + " changed files, " + risks.size() + " findings.";
+            String summaryPrefix = originSummary == null || originSummary.isBlank() ? "" : originSummary + " ";
+            String summary = summaryPrefix + "Review completed for " + parsedDiff.changedFileCount() + " changed files, " + risks.size() + " findings.";
             String markdown = markdown(summary, riskLevel, risks, suggestedTests, citations);
 
             task.setSummary(summary);
